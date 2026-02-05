@@ -1,0 +1,7 @@
+pytest
+pytest-asyncio
+boto3
+moto
+langgraph
+langchain
+pydantic

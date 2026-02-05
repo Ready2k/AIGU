@@ -78,3 +78,40 @@ The logic is distributed across six specialized agents located in `/agents`, pow
 * **Session Recovery:** The app must look up submissionId in DynamoDB on mount to resume progress via the Support Agent.
 * **Dynamic Rendering:** Screens must never be hardcoded; use state-driven component mapping (e.g., render specific modules based on Risk Level).
 * **Audit Trail:** Every state change must be logged as a permanent entry for full governance compliance.
+
+
+# diagram
+```mermaid
+graph TD
+    %% Start and Intake
+    Start((Start: User Submits Idea)) --> Intake{Intake Orchestrator}
+    
+    Intake -- Stop --> EndStop([End: Stop Process])
+    Intake -- BAU --> EndBAU([End: Redirect to BAU Process])
+    Intake -- Accelerator --> Risk[Risk & Triage Agent]
+
+    %% Risk and Pilot
+    Risk --> |Calculate SLA: 3/7/10 Days| Lib[Gov Librarian]
+    Lib --> |Condense 9 Artifacts| Gate{Gatekeeper Agent}
+
+    %% The Offline Loop
+    Gate --> |Signal: Review Required| Offline[Offline Approval Loop]
+    subgraph Offline_Process [External Stakeholder Review]
+        Offline --> Legal[Legal/GIGC Review]
+        Legal -- Challenge --> Blocked[Status: Blocked]
+        Legal -- Approve --> Approved[Status: Approved]
+    end
+
+    Blocked --> |Support Agent Insights| Gate
+    Approved --> Outcome[Outcome Tracker]
+
+    %% Production
+    Outcome --> |Validate KPIs & Incremental Risk| Prod([End: Production Live])
+
+    %% Support Agent (Universal Overlay)
+    Support{Support & Insights Agent} -.-> |Query Status/Blockers| Start
+    Support -.-> |Read-Only State Access| Prod
+    
+    style Offline_Process fill:#f9f,stroke:#333,stroke-width:2px
+    style Support fill:#fff,stroke:#333,stroke-dasharray: 5 5
+```
