@@ -80,7 +80,7 @@ The logic is distributed across six specialized agents located in `/agents`, pow
 * **Audit Trail:** Every state change must be logged as a permanent entry for full governance compliance.
 
 
-# diagram
+# Flow Diagram
 ```mermaid
 graph TD
     %% Start and Intake
@@ -114,4 +114,41 @@ graph TD
     
     style Offline_Process fill:#f9f,stroke:#333,stroke-width:2px
     style Support fill:#fff,stroke:#333,stroke-dasharray: 5 5
+```
+
+## Architecture
+```mermaid
+graph TB
+    subgraph Client_Layer [Client Layer]
+        A2UI[React Native App / A2UI]
+    end
+
+    subgraph API_Layer [API & Logic Layer]
+        APIGW[Amazon API Gateway]
+        Lambda[AWS Lambda / LangGraph Engine]
+    end
+
+    subgraph Agent_Brain [The 6-Agent Brain]
+        Intake[Intake Orchestrator]
+        Risk[Risk & Triage]
+        Lib[Gov Librarian]
+        Gate[Gatekeeper]
+        Out[Outcome Tracker]
+        Supp[Support & Insights]
+    end
+
+    subgraph Persistence_Models [Persistence & LLM Layer]
+        Bedrock[[Amazon Bedrock / Nova Pro & Lite]]
+        Dynamo[(Amazon DynamoDB / Global State)]
+        SES[Amazon SES / Offline Approval Emails]
+    end
+
+    %% Flow Connections
+    A2UI <--> APIGW
+    APIGW <--> Lambda
+    Lambda <--> Agent_Brain
+    Agent_Brain <--> Bedrock
+    Agent_Brain <--> Dynamo
+    Gate -.-> SES
+    SES -.-> APIGW
 ```
