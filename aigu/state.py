@@ -22,6 +22,12 @@ class AuditLogEntry(TypedDict):
     action: str
     reason: str
 
+class SystemConfig(TypedDict, total=False):
+    linkDomainWhitelist: List[str]
+    deltaThreshold: float
+    allowAIAutoApproval: bool
+    mandatorySections: List[str]
+
 class GlobalState(TypedDict, total=False):
     submissionId: str
     userId: str
@@ -29,4 +35,5 @@ class GlobalState(TypedDict, total=False):
     artifacts: Artifacts
     governance: Governance
     auditLog: List[AuditLogEntry]
-    ui_overlay: Dict[str, Any] # Added for Support Agent output
+    ui_overlay: Dict[str, Any]
+    systemConfig: SystemConfig # Added field

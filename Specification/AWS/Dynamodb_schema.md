@@ -40,3 +40,30 @@ This schema is designed to support the **LangGraph** "Brain" and ensure the **Su
     }
   ]
 }
+
+## 3. NEW Table: AIGU_System_Config
+*This table allows Admins and Tribe Owners to tune the "Brain" logic.*
+
+- **Partition Key:** `configType` (String) - e.g., "Tribe_Rule", "Global_Settings"
+- **Sort Key:** `configId` (String) - e.g., "Legal_Gold_Standard", "Link_Whitelist"
+
+### Config Item Examples:
+
+#### A. Tribe Rule (Gold Standard)
+{
+  "configType": "Tribe_Rule",
+  "configId": "Security_Artifacts",
+  "owner": "CISO_Office",
+  "mandatorySections": ["DataFlowDiagram", "IAM_Specs", "Encryption_Standard"],
+  "goldStandardS3Uri": "s3://aigu-gold-standards/security-v1.pdf",
+  "description": "The benchmark for all Security Technical Reviews."
+}
+
+#### B. Global Settings (Tuneable Items)
+{
+  "configType": "Global_Settings",
+  "configId": "Verification_Parameters",
+  "linkDomainWhitelist": ["github.com", "sharepoint.com", "internal.corp"],
+  "deltaThreshold": 0.15, // 15% change triggers a "Blocked" state for Prod
+  "allowAIAutoApproval": true
+}

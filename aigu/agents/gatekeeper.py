@@ -5,8 +5,8 @@ from aigu.state import GlobalState, AuditLogEntry
 def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
     """
     Gatekeeper Agent Node.
-    Manages 'Offline Approvals' and transitions based on External Signals.
-    Ref: agents/gatekeeper.md, A2UI/OFFLINE_WORKFLOW_MECHANISM.md
+    Manages 'Offline Approvals', transitions, and link verification.
+    Ref: agents/gatekeeper.md, A2UI/OFFLINE_WORKFLOW_MECHANISM.md, verification_rules.md
     """
     project_metadata = state.get("projectMetadata", {})
     risk_level = project_metadata.get("riskLevel", "Low")
@@ -14,36 +14,54 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
     
     artifacts = state.get("artifacts", {})
     compliance_status = artifacts.get("complianceStatus", [])
+    tech_design = artifacts.get("technicalDesign", {})
     
     governance = state.get("governance", {})
     current_status = governance.get("status", "Draft")
     
+    # NEW: System Config
+    system_config = state.get("systemConfig", {})
+    whitelist = system_config.get("linkDomainWhitelist", ["github.com", "sharepoint.com"])
+    
     action_log = []
+    blockers = []
     
-    # New State Containers
     new_governance = governance.copy()
-    new_compliance = compliance_status[:] # Shallow copy list
+    new_compliance = compliance_status[:]
     
-    # Logic 1: Triggering Event (Review Ready -> In-Review)
-    # If High Risk and we haven't started reviews yet (and not already broken/approved)
-    if risk_level == "High" and not compliance_status and current_status == "Draft":
-        # Initialize Reviews
-        # In a real app, we'd determine WHICH horizontals based on artifacts
-        # For simulation, we add 'Legal' and 'GIGC'
+    # Logic 0: Link & Source Security (verification_rules.md)
+    # Check for invalid links in technicalDesign
+    # (Simple logic: check any string value starting with http)
+    invalid_links = []
+    for key, val in tech_design.items():
+        if isinstance(val, str) and val.startswith("http"):
+            domain_ok = False
+            for safe_domain in whitelist:
+                if safe_domain in val:
+                    domain_ok = True
+                    break
+            if not domain_ok:
+                invalid_links.append(f"{key}: {val}")
+    
+    if invalid_links:
+        # If links are bad, we BLOCK immediately per Rule 3
+        blockers.append(f"Security Rule Violation: Non-whitelisted domains found: {'; '.join(invalid_links)}")
+
+    # Logic 1: Triggering Event
+    if risk_level == "High" and not compliance_status and current_status == "Draft" and not blockers:
         new_compliance = [
             {"horizontal": "Legal", "status": "Pending"},
             {"horizontal": "GIGC", "status": "Pending"}
         ]
         new_governance["status"] = "In-Review"
         action_log.append("Initiated GIGC/Legal Review")
-        action_log.append("SES Notification Sent (Mock)")
         
-    # Logic 2: Evaluate Signals (The Loop)
-    # Check the complianceStatus array for external updates
-    
-    blockers = []
+    # Logic 2: Evaluate Signals
     all_approved = True
     has_pending = False
+    
+    # If already blocked by Logic 0, we don't need deep link check yet, or merge them?
+    # Let's merge
     
     if new_compliance:
         for item in new_compliance:
@@ -55,32 +73,19 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
             elif status == "Pending":
                 all_approved = False
                 has_pending = True
-            elif status == "Approved":
-                pass # Good
     
     # Logic 3: State Mutation
     if blockers:
         new_governance["status"] = "Blocked"
         new_governance["blockers"] = blockers
-        action_log.append(f"Blocked by {len(blockers)} horizontal(s)")
-    elif all_approved and new_compliance: # Must have at least one approval to be approved
+        action_log.append(f"Blocked by {len(blockers)} check(s)")
+    elif all_approved and new_compliance and not invalid_links:
         new_governance["status"] = "Approved"
-        new_governance["blockers"] = [] # Clear blockers
-        action_time = "Production" if current_stage == "Pilot" else "Pilot" # Move to next? 
-        # For simplicity, we just mark status Approved. The graph orchestrator handles stage moves usually.
-        # But Gatekeeper spec says "Transitions project to the next node."
-        action_log.append("All Horizontals Approved")
+        new_governance["blockers"] = []
+        action_log.append("All Verification Checks Passed")
     elif has_pending:
-        # Still waiting
         new_governance["status"] = "In-Review"
     
-    # Logic 4: Incremental Risk (Pilot -> Prod) check
-    # If we are already in Pilot and Status is Approved, we might move to Prod
-    if current_stage == "Pilot" and new_governance["status"] == "Approved":
-        # Check if this is a delta review? 
-        # For now, we assume if we reached Approved in Pilot, we are ready for Outcome
-        pass
-
     # Audit Log
     if action_log:
         audit_entry: AuditLogEntry = {
@@ -97,4 +102,4 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
             "auditLog": new_audit_log
         }
     
-    return {} # No change
+    return {}
