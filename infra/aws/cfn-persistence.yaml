@@ -65,11 +65,33 @@ Resources:
           - AllowedOrigins:
               - 'http://localhost:8081'
               - 'http://localhost:19006'
+              - 'https://*.execute-api.us-east-1.amazonaws.com'
             AllowedMethods:
               - GET
+              - POST
+              - PUT
             AllowedHeaders:
               - '*'
-            MaxAge: 3000
+            MaxAge: 3600
+
+  # S3 Bucket Policy - Enforce TLS 1.2+
+  AIGUArtifactBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AIGUArtifactBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnforceTLS12OrHigher
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub '${AIGUArtifactBucket.Arn}/*'
+              - !GetAtt AIGUArtifactBucket.Arn
+            Condition:
+              NumericLessThan:
+                's3:TlsVersion': '1.2'
 
   # 4. LangGraph Checkpoints Table
   AIGUCheckpointsTable:

@@ -93,6 +93,9 @@ def handover_agent(state: GlobalState) -> GlobalState:
     }
     
     # Update UI message
+    if "ui_overlay" not in state:
+        state["ui_overlay"] = {}
+    
     state["ui_overlay"]["supportMessage"] = (
         "🎉 Congratulations! Your project has been approved and is now LIVE in production. "
         "Handover tasks have been assigned to:\n"

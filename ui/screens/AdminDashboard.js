@@ -1,128 +1,647 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Switch, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, Modal, TextInput } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
-import ResponsiveWrapper from '../components/ResponsiveWrapper';
+import { useAiguState } from '../hooks/useAiguState';
+import WorkflowProgress from '../components/WorkflowProgress';
+import SupportAgent from '../components/SupportAgent';
 
-const AdminDashboard = ({ actions }) => {
-    const { theme, toggleTheme, isDark } = useAiguTheme();
-    const { width } = useWindowDimensions();
+/**
+ * AdminDashboard Component - Desktop-Optimized Admin Interface
+ * 
+ * Matches the user dashboard style with:
+ * - Left Sidebar: Queue filters and stats
+ * - Center Panel: Project queue with details
+ * - Right Sidebar: Support chat for asking questions about submissions
+ */
+const AdminDashboard = ({ userId, onLogout }) => {
+    const { theme } = useAiguTheme();
 
-    // Grid Logic
-    const isDesktop = width >= 768;
-    // On Desktop, cards take ~48% to fit 2 per row. On Mobile, 100%.
-    const cardWidth = isDesktop ? '48%' : '100%';
+    // Use real state hook for admin actions
+    const { actions } = useAiguState('temp', userId);
 
-    return (
-        <ResponsiveWrapper>
-            <View style={styles.headerRow}>
-                <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary }}>
-                    Admin Dashboard
+    // Queue Management
+    const [queue, setQueue] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedProject, setSelectedProject] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterStatus, setFilterStatus] = useState('All');
+
+    // Modals & Actions
+    const [requestInfoModal, setRequestInfoModal] = useState(null);
+    const [feedbackMessage, setFeedbackMessage] = useState('');
+    const [deltaModal, setDeltaModal] = useState(null);
+    const [deltaDetails, setDeltaDetails] = useState(null);
+    const [loadingDelta, setLoadingDelta] = useState(false);
+    const [supportPanelOpen, setSupportPanelOpen] = useState(true);
+    const [reasoningPanel, setReasoningPanel] = useState(true);
+
+    useEffect(() => {
+        refreshQueue();
+    }, []);
+
+    const refreshQueue = async () => {
+        setLoading(true);
+        const data = await actions.fetchAdminQueue();
+        setQueue(data);
+
+        // Auto-select first item if none selected
+        if (data.length > 0 && !selectedProject) {
+            setSelectedProject(data[0]);
+        }
+        setLoading(false);
+    };
+
+    const handleApprove = async (item) => {
+        Alert.alert(
+            "Confirm Approval",
+            `Approve "${item.projectMetadata?.name || item.submissionId}"?`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Approve",
+                    onPress: async () => {
+                        const success = await actions.adminAction(item.submissionId, item.userId, "ADMIN_APPROVE");
+                        if (success) {
+                            Alert.alert("✅ Approved", "Project approved and will proceed.");
+                            refreshQueue();
+                        } else {
+                            Alert.alert("Error", "Failed to approve project.");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleRequestInfo = (item) => {
+        setRequestInfoModal(item);
+        setFeedbackMessage('');
+    };
+
+    const submitRequestInfo = async () => {
+        if (!feedbackMessage.trim()) {
+            Alert.alert("Error", "Please enter a feedback message.");
+            return;
+        }
+
+        const success = await actions.adminAction(
+            requestInfoModal.submissionId,
+            requestInfoModal.userId,
+            "ADMIN_REQUEST_INFO",
+            feedbackMessage
+        );
+
+        if (success) {
+            Alert.alert("📨 Info Requested", "User has been notified.");
+            setRequestInfoModal(null);
+            setFeedbackMessage('');
+            refreshQueue();
+        } else {
+            Alert.alert("Error", "Failed to send request.");
+        }
+    };
+
+    const handleViewDelta = async (item) => {
+        setDeltaModal(item);
+        setLoadingDelta(true);
+        setDeltaDetails(null);
+
+        try {
+            const result = await actions.fetchDelta(item.submissionId, item.projectMetadata?.previousVersionId);
+            setDeltaDetails(result);
+        } catch (error) {
+            console.error("Failed to fetch delta:", error);
+        } finally {
+            setLoadingDelta(false);
+        }
+    };
+
+    const handleDelete = (item) => {
+        Alert.alert(
+            "⚠️ Confirm Deletion",
+            `Are you sure you want to permanently delete "${item.projectMetadata?.name || item.submissionId}"?\n\nThis action cannot be undone.`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const success = await actions.deleteProject(item.submissionId, item.userId);
+                            if (success) {
+                                Alert.alert("✅ Deleted", "Project has been permanently removed.");
+                                // Clear selection if deleted project was selected
+                                if (selectedProject?.submissionId === item.submissionId) {
+                                    setSelectedProject(null);
+                                }
+                                refreshQueue();
+                            } else {
+                                Alert.alert("Error", "Failed to delete project.");
+                            }
+                        } catch (error) {
+                            console.error("Delete failed:", error);
+                            Alert.alert("Error", "Failed to delete project.");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    // Filter queue
+    const filteredQueue = queue.filter(item => {
+        const matchesSearch = item.projectMetadata?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item.submissionId.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesFilter = filterStatus === 'All' || item.governance?.status === filterStatus;
+        return matchesSearch && matchesFilter;
+    });
+
+    // Get queue stats
+    const stats = {
+        total: queue.length,
+        pending: queue.filter(q => q.governance?.status === 'In-Review' || q.governance?.status === 'Pending').length,
+        blocked: queue.filter(q => q.governance?.status === 'Blocked').length,
+        approved: queue.filter(q => q.governance?.status === 'Approved').length
+    };
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'Approved': return theme.colors.success;
+            case 'Blocked': return theme.colors.error;
+            case 'In-Review':
+            case 'Pending': return theme.colors.warning;
+            default: return '#6c757d';
+        }
+    };
+
+    const renderRightPanel = () => {
+        if (!selectedProject) {
+            return (
+                <View style={styles.emptyPanel}>
+                    <Text style={{ ...theme.typography.body, color: theme.colors.textSecondary }}>
+                        Select a project to view details
+                    </Text>
+                </View>
+            );
+        }
+
+        return (
+            <ScrollView style={{ flex: 1, padding: 20 }}>
+                <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, marginBottom: 8 }}>
+                    {selectedProject.projectMetadata?.name || 'Untitled Project'}
+                </Text>
+                <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, marginBottom: 20 }}>
+                    {selectedProject.submissionId}
                 </Text>
 
-                {/* Theme Toggle in Header */}
-                <View style={styles.toggleRow}>
-                    <Text style={{ ...theme.typography.caption, marginRight: 8 }}>
-                        {isDark ? 'Dark Mode' : 'Light Mode'}
+                {/* Quick Actions */}
+                <View style={styles.actionSection}>
+                    <Text style={{ ...theme.typography.subheader, color: theme.colors.textPrimary, marginBottom: 12 }}>
+                        Quick Actions
                     </Text>
-                    <Switch
-                        value={isDark}
-                        onValueChange={toggleTheme}
-                        trackColor={{ false: '#767577', true: theme.colors.secondary }}
-                        thumbColor={isDark ? theme.colors.textPrimary : '#f4f3f4'}
+                    <TouchableOpacity
+                        style={[styles.actionButton, { backgroundColor: theme.colors.success }]}
+                        onPress={() => handleApprove(selectedProject)}
+                    >
+                        <Text style={{ color: '#FFF', fontWeight: '700' }}>✓ APPROVE</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.actionButton, { backgroundColor: theme.colors.warning, marginTop: 8 }]}
+                        onPress={() => handleRequestInfo(selectedProject)}
+                    >
+                        <Text style={{ color: '#FFF', fontWeight: '700' }}>📨 REQUEST INFO</Text>
+                    </TouchableOpacity>
+                    {selectedProject.projectMetadata?.previousVersionId && (
+                        <TouchableOpacity
+                            style={[styles.actionButton, { backgroundColor: theme.colors.accent, marginTop: 8 }]}
+                            onPress={() => handleViewDelta(selectedProject)}
+                        >
+                            <Text style={{ color: '#FFF', fontWeight: '700' }}>📊 VIEW DELTA</Text>
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                        style={[styles.actionButton, { backgroundColor: theme.colors.error, marginTop: 8 }]}
+                        onPress={() => handleDelete(selectedProject)}
+                    >
+                        <Text style={{ color: '#FFF', fontWeight: '700' }}>🗑️ DELETE</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Project Details */}
+                <View style={{ marginTop: 24 }}>
+                    <Text style={{ ...theme.typography.subheader, color: theme.colors.textPrimary, marginBottom: 12 }}>
+                        Project Details
+                    </Text>
+                    <DetailRow label="User" value={selectedProject.userId} theme={theme} />
+                    <DetailRow label="Stage" value={selectedProject.projectMetadata?.currentStage || 'Intake'} theme={theme} />
+                    <DetailRow label="Risk Level" value={selectedProject.projectMetadata?.riskLevel || 'Low'} theme={theme} />
+                    <DetailRow label="Path" value={selectedProject.projectMetadata?.path || 'Standard'} theme={theme} />
+                </View>
+
+                {/* Blockers */}
+                {selectedProject.governance?.blockers?.length > 0 && (
+                    <View style={{ marginTop: 24 }}>
+                        <Text style={{ ...theme.typography.subheader, color: theme.colors.error, marginBottom: 12 }}>
+                            ⚠️ Blockers
+                        </Text>
+                        {selectedProject.governance.blockers.map((blocker, i) => (
+                            <Text key={i} style={{ ...theme.typography.body, color: theme.colors.textPrimary, marginBottom: 6 }}>
+                                • {blocker}
+                            </Text>
+                        ))}
+                    </View>
+                )}
+
+                {/* Workflow */}
+                <View style={{ marginTop: 24 }}>
+                    <Text style={{ ...theme.typography.subheader, color: theme.colors.textPrimary, marginBottom: 12 }}>
+                        Workflow Progress
+                    </Text>
+                    <WorkflowProgress state={selectedProject} />
+                </View>
+            </ScrollView>
+        );
+    };
+
+    return (
+        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            {/* Left Sidebar - Filters & Stats */}
+            <View style={[styles.sidebar, { backgroundColor: theme.colors.surface, borderRightColor: theme.colors.border }]}>
+                <View style={styles.sidebarHeader}>
+                    <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, fontSize: 18 }}>
+                        Admin Queue
+                    </Text>
+                    <TouchableOpacity onPress={refreshQueue}>
+                        <Text style={{ color: theme.colors.accent, fontSize: 20 }}>↻</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Stats */}
+                <View style={styles.statsContainer}>
+                    <StatCard label="Total" value={stats.total} color={theme.colors.primary} theme={theme} />
+                    <StatCard label="Pending" value={stats.pending} color={theme.colors.warning} theme={theme} />
+                    <StatCard label="Blocked" value={stats.blocked} color={theme.colors.error} theme={theme} />
+                    <StatCard label="Approved" value={stats.approved} color={theme.colors.success} theme={theme} />
+                </View>
+
+                {/* Search */}
+                <TextInput
+                    style={[styles.searchInput, {
+                        backgroundColor: theme.colors.background,
+                        color: theme.colors.textPrimary,
+                        borderColor: theme.colors.border
+                    }]}
+                    placeholder="Search projects..."
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                />
+
+                {/* Filter Buttons */}
+                <View style={styles.filterContainer}>
+                    {['All', 'In-Review', 'Blocked', 'Approved'].map(filter => (
+                        <TouchableOpacity
+                            key={filter}
+                            style={[
+                                styles.filterButton,
+                                {
+                                    backgroundColor: filterStatus === filter ? theme.colors.primary : 'transparent',
+                                    borderColor: theme.colors.border
+                                }
+                            ]}
+                            onPress={() => setFilterStatus(filter)}
+                        >
+                            <Text style={{
+                                color: filterStatus === filter ? '#FFF' : theme.colors.textPrimary,
+                                fontSize: 11,
+                                fontWeight: '600'
+                            }}>
+                                {filter}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                {/* Queue List */}
+                <ScrollView style={{ flex: 1 }}>
+                    {loading ? (
+                        <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 20 }} />
+                    ) : (
+                        filteredQueue.map((item) => (
+                            <TouchableOpacity
+                                key={item.submissionId}
+                                style={[
+                                    styles.queueCard,
+                                    {
+                                        backgroundColor: selectedProject?.submissionId === item.submissionId
+                                            ? theme.colors.primary + '20'
+                                            : 'transparent',
+                                        borderLeftColor: selectedProject?.submissionId === item.submissionId
+                                            ? theme.colors.primary
+                                            : 'transparent'
+                                    }
+                                ]}
+                                onPress={() => setSelectedProject(item)}
+                            >
+                                <Text style={{
+                                    ...theme.typography.body,
+                                    color: theme.colors.textPrimary,
+                                    fontWeight: selectedProject?.submissionId === item.submissionId ? '700' : '500'
+                                }} numberOfLines={1}>
+                                    {item.projectMetadata?.name || item.submissionId}
+                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                    <View style={[styles.miniStatusDot, {
+                                        backgroundColor: getStatusColor(item.governance?.status)
+                                    }]} />
+                                    <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontSize: 10 }}>
+                                        {item.governance?.status || 'Draft'}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        ))
+                    )}
+                </ScrollView>
+
+                {/* Footer */}
+                <View style={styles.sidebarFooter}>
+                    <View style={[styles.userBadge, { backgroundColor: theme.colors.background }]}>
+                        <Text style={{ color: theme.colors.textPrimary, fontSize: 11, fontWeight: '700' }}>
+                            {userId}
+                        </Text>
+                    </View>
+                    <TouchableOpacity onPress={onLogout}>
+                        <Text style={{ color: theme.colors.error, fontSize: 11, fontWeight: '700' }}>LOGOUT</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* Center/Right Panel - Project Details */}
+            <View style={styles.mainContent}>
+                {renderRightPanel()}
+            </View>
+
+            {/* Request Info Modal */}
+            {requestInfoModal && (
+                <Modal transparent visible={!!requestInfoModal} animationType="fade">
+                    <View style={styles.modalOverlay}>
+                        <View style={[styles.modalContent, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                            <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, marginBottom: 16 }}>
+                                Request Additional Information
+                            </Text>
+                            <Text style={{ ...theme.typography.body, color: theme.colors.textSecondary, marginBottom: 12 }}>
+                                Project: {requestInfoModal.projectMetadata?.name || requestInfoModal.submissionId}
+                            </Text>
+                            <TextInput
+                                style={[styles.feedbackInput, {
+                                    backgroundColor: theme.colors.background,
+                                    color: theme.colors.textPrimary,
+                                    borderColor: theme.colors.border
+                                }]}
+                                placeholder="Enter your feedback or questions..."
+                                placeholderTextColor={theme.colors.textSecondary}
+                                value={feedbackMessage}
+                                onChangeText={setFeedbackMessage}
+                                multiline
+                                numberOfLines={4}
+                            />
+                            <View style={styles.modalActions}>
+                                <TouchableOpacity
+                                    style={[styles.modalButton, { backgroundColor: theme.colors.border }]}
+                                    onPress={() => setRequestInfoModal(null)}
+                                >
+                                    <Text style={{ color: theme.colors.textPrimary, fontWeight: '700' }}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}
+                                    onPress={submitRequestInfo}
+                                >
+                                    <Text style={{ color: '#FFF', fontWeight: '700' }}>Send Request</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
+            )}
+
+            {/* Delta Modal */}
+            {deltaModal && (
+                <Modal transparent visible={!!deltaModal} animationType="fade">
+                    <View style={styles.modalOverlay}>
+                        <View style={[styles.modalContent, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, maxHeight: '80%' }]}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary }}>
+                                    Delta Analysis
+                                </Text>
+                                <TouchableOpacity onPress={() => setDeltaModal(null)}>
+                                    <Text style={{ color: theme.colors.textSecondary, fontSize: 24 }}>×</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {loadingDelta ? (
+                                <ActivityIndicator size="large" color={theme.colors.primary} />
+                            ) : deltaDetails ? (
+                                <ScrollView>
+                                    <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary }}>
+                                        {JSON.stringify(deltaDetails, null, 2)}
+                                    </Text>
+                                </ScrollView>
+                            ) : (
+                                <Text style={{ ...theme.typography.body, color: theme.colors.textSecondary }}>
+                                    No delta information available
+                                </Text>
+                            )}
+                        </View>
+                    </View>
+                </Modal>
+            )}
+
+            {/* Right Sidebar - Support Agent */}
+            {supportPanelOpen && selectedProject && (
+                <View style={[styles.supportSidebar, {
+                    backgroundColor: theme.colors.surface,
+                    borderLeftColor: theme.colors.border
+                }]}>
+                    <SupportAgent
+                        state={selectedProject}
+                        onClose={() => setSupportPanelOpen(false)}
                     />
                 </View>
-            </View>
+            )}
 
-            <View style={[styles.gridContainer, { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }]}>
-
-                {/* 1. Tribe Rules Card */}
-                <View style={[styles.card, { backgroundColor: theme.colors.surface, width: cardWidth, borderColor: theme.colors.border }]}>
-                    <Text style={{ ...theme.typography.subheader, color: theme.colors.primary, marginBottom: 12 }}>
-                        Tribe Rules
-                    </Text>
-                    <Text style={{ ...theme.typography.body, color: theme.colors.textSecondary }}>
-                        Global compliance rules applied to all Intake workflows.
-                    </Text>
-                    <View style={styles.statRow}>
-                        <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary }}>Active Rules: 12</Text>
-                    </View>
-                    <TouchableOpacity
-                        style={[styles.button, { backgroundColor: theme.colors.accent }]}
-                        onPress={() => alert("Manage Rules")}
-                    >
-                        <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Manage Rules</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* 2. Global Guardrails Card */}
-                <View style={[styles.card, { backgroundColor: theme.colors.surface, width: cardWidth, borderColor: theme.colors.border }]}>
-                    <Text style={{ ...theme.typography.subheader, color: theme.colors.primary, marginBottom: 12 }}>
-                        Global Guardrails
-                    </Text>
-                    <Text style={{ ...theme.typography.body, color: theme.colors.textSecondary }}>
-                        System-wide thresholds for Risk, Delta Analysis, and Budget.
-                    </Text>
-                    <View style={styles.statRow}>
-                        <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary }}>Delta Threshold: 15%</Text>
-                    </View>
-                    <TouchableOpacity
-                        style={[styles.button, { backgroundColor: theme.colors.accent }]}
-                        onPress={() => alert("Update Guardrails")}
-                    >
-                        <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Update Guardrails</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* 3. System Health (Full Width on Mobile, Grid on Large) */}
-                <View style={[styles.card, { backgroundColor: theme.colors.surface, width: '100%', marginTop: 24, borderColor: theme.colors.border }]}>
-                    <Text style={{ ...theme.typography.subheader, color: theme.colors.primary }}>
-                        System Health
-                    </Text>
-                    <Text style={{ ...theme.typography.mono, color: theme.colors.textSecondary, marginTop: 8 }}>
-                        Dependencies: All Systems Operational{'\n'}
-                        Latency: 45ms (us-east-1)
-                    </Text>
-                </View>
-
-            </View>
-        </ResponsiveWrapper>
+            {!supportPanelOpen && (
+                <TouchableOpacity
+                    style={[styles.supportToggle, { backgroundColor: theme.colors.primary }]}
+                    onPress={() => setSupportPanelOpen(true)}
+                >
+                    <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 18 }}>💬</Text>
+                </TouchableOpacity>
+            )}
+        </View>
     );
 };
 
+// Helper Components
+const StatCard = ({ label, value, color, theme }) => (
+    <View style={[styles.statCard, { borderLeftColor: color }]}>
+        <Text style={{ fontSize: 24, fontWeight: '700', color: theme.colors.textPrimary }}>{value}</Text>
+        <Text style={{ fontSize: 10, color: theme.colors.textSecondary, marginTop: 2 }}>{label}</Text>
+    </View>
+);
+
+const DetailRow = ({ label, value, theme }) => (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+        <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary }}>{label}:</Text>
+        <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, fontWeight: '600' }}>{value}</Text>
+    </View>
+);
+
 const styles = StyleSheet.create({
-    headerRow: {
+    container: {
+        flex: 1,
+        flexDirection: 'row'
+    },
+    sidebar: {
+        width: 280,
+        borderRightWidth: 1,
+        flexDirection: 'column'
+    },
+    sidebarHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24
+        padding: 20,
+        paddingBottom: 12
     },
-    toggleRow: {
+    statsContainer: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
+        padding: 12,
+        gap: 8
+    },
+    statCard: {
+        flex: 1,
+        minWidth: '45%',
+        padding: 12,
+        borderRadius: 8,
+        borderLeftWidth: 3,
+        backgroundColor: 'rgba(0,0,0,0.02)'
+    },
+    searchInput: {
+        marginHorizontal: 16,
+        marginBottom: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 6,
+        borderWidth: 1,
+        fontSize: 13
+    },
+    filterContainer: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        marginBottom: 12,
+        gap: 6
+    },
+    filterButton: {
+        flex: 1,
+        paddingVertical: 6,
+        paddingHorizontal: 8,
+        borderRadius: 4,
+        borderWidth: 1,
         alignItems: 'center'
     },
-    gridContainer: {
-        // FlexWrap is handled inline for dynamic width access
+    queueCard: {
+        padding: 12,
+        marginHorizontal: 8,
+        marginVertical: 4,
+        borderRadius: 6,
+        borderLeftWidth: 3
     },
-    card: {
-        padding: 20,
+    miniStatusDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginRight: 4
+    },
+    sidebarFooter: {
+        padding: 16,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.1)',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+    },
+    userBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 12
+    },
+    mainContent: {
+        flex: 1
+    },
+    emptyPanel: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    actionSection: {
+        marginTop: 20
+    },
+    actionButton: {
+        paddingVertical: 12,
         borderRadius: 8,
+        alignItems: 'center'
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20
+    },
+    modalContent: {
+        width: '90%',
+        maxWidth: 500,
+        padding: 24,
+        borderRadius: 16,
+        borderWidth: 1
+    },
+    feedbackInput: {
         borderWidth: 1,
+        borderRadius: 8,
+        padding: 12,
         marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2
+        minHeight: 100,
+        textAlignVertical: 'top'
     },
-    statRow: {
-        marginTop: 8,
-        marginBottom: 16
+    modalActions: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: 12
     },
-    button: {
+    modalButton: {
         paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderRadius: 4,
-        alignSelf: 'flex-start'
+        paddingHorizontal: 20,
+        borderRadius: 8
+    },
+    supportSidebar: {
+        width: 360,
+        borderLeftWidth: 1
+    },
+    supportToggle: {
+        position: 'absolute',
+        right: 0,
+        top: '50%',
+        width: 48,
+        height: 48,
+        borderTopLeftRadius: 24,
+        borderBottomLeftRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: -2, height: 0 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 4
     }
 });
 

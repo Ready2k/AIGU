@@ -59,9 +59,17 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
+                  - s3:DeleteObject
                 Resource: 
                   - !Sub 
                     - 'arn:aws:s3:::${BucketName}/*'
+                    - BucketName: !ImportValue AIGU-ArtifactBucketName
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 
+                    - 'arn:aws:s3:::${BucketName}'
                     - BucketName: !ImportValue AIGU-ArtifactBucketName
         - PolicyName: AIGU-BedrockAccess
           PolicyDocument:

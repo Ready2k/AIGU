@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, SafeAreaView, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-import RootNavigator from './navigation/RootNavigator';
-import SessionLobby from './screens/SessionLobby';
+import Dashboard from './screens/Dashboard';
+import AdminDashboard from './screens/AdminDashboard';
 import DevConsole from './screens/DevConsole';
-import NavigationBreadcrumbs from './components/NavigationBreadcrumbs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useAiguTheme } from './theme/ThemeContext';
 import { useAiguState } from './hooks/useAiguState';
@@ -11,22 +10,19 @@ import { useAiguState } from './hooks/useAiguState';
 function AppContent() {
     const { theme } = useAiguTheme();
 
-    const [submissionId, setSubmissionId] = useState(null);
     const [userId, setUserId] = useState('demo-user-123');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [showDevConsole, setShowDevConsole] = useState(false);
 
     const isAdmin = userId.toLowerCase() === 'admin';
-    const { actions } = useAiguState(submissionId || 'temp', userId);
+    const { actions } = useAiguState('temp', userId);
 
     if (showDevConsole) {
         return <DevConsole actions={actions} onClose={() => setShowDevConsole(false)} />;
     }
 
-    const handleBackToLobby = () => setSubmissionId(null);
     const handleLogout = () => {
         setIsLoggedIn(false);
-        setSubmissionId(null);
     };
 
     if (!isLoggedIn) {
@@ -41,7 +37,7 @@ function AppContent() {
                         AIGU Workspace
                     </Text>
                     <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, textAlign: 'center', marginTop: 8 }}>
-                        Secure Governance Environment
+                        Desktop Governance Dashboard
                     </Text>
 
                     <View style={styles.inputGroup}>
@@ -54,7 +50,7 @@ function AppContent() {
                             }]}
                             value={userId}
                             onChangeText={setUserId}
-                            placeholder="e.g. jcregeen or your name"
+                            placeholder="e.g. jcregeen or 'admin'"
                             placeholderTextColor={theme.colors.textSecondary}
                         />
                     </View>
@@ -77,34 +73,24 @@ function AppContent() {
         );
     }
 
-    if (!submissionId && !isAdmin) {
+    // Admin view - use new AdminDashboard
+    if (isAdmin) {
         return (
             <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
-                <NavigationBreadcrumbs
+                <AdminDashboard
                     userId={userId}
-                    projectName="Project Selection"
-                    currentStage="Lobby"
-                    isAdmin={false}
-                    onBackToLobby={handleBackToLobby}
                     onLogout={handleLogout}
-                />
-                <SessionLobby
-                    userId={userId}
-                    actions={actions}
-                    onSelectSession={(id) => setSubmissionId(id)}
-                    onNewSession={() => setSubmissionId(`proj-${Date.now()}`)}
                 />
             </SafeAreaView>
         );
     }
 
+    // User view - new Desktop Dashboard
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
-            <RootNavigator
-                submissionId={submissionId || 'admin-global'}
+            <Dashboard
                 userId={userId}
                 isAdmin={isAdmin}
-                onBackToLobby={handleBackToLobby}
                 onLogout={handleLogout}
             />
         </SafeAreaView>

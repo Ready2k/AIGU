@@ -1,11 +1,39 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
 
 const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, setRemediating }) => {
     const { theme } = useAiguTheme();
+    const [projectName, setProjectName] = useState(initialData.projectName || '');
     const [description, setDescription] = useState(initialData.description || '');
+    const [submitting, setSubmitting] = useState(false);
+
+    const handleSubmit = async () => {
+        // Validation
+        if (!projectName.trim()) {
+            Alert.alert('Missing Information', 'Please enter a project name.');
+            return;
+        }
+        if (!description.trim()) {
+            Alert.alert('Missing Information', 'Please enter a project description.');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            await actions.initiateIntake({
+                projectName: projectName.trim(),
+                description: description.trim()
+            });
+            if (setRemediating) setRemediating(false);
+        } catch (error) {
+            console.error('Failed to submit intake:', error);
+            Alert.alert('Error', 'Failed to submit project. Please try again.');
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     return (
         <ResponsiveWrapper>
@@ -16,12 +44,31 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
 
                 <Text style={{ ...theme.typography.body, color: theme.colors.textSecondary, marginBottom: theme.spacing.lg }}>
                     {isRemediation
-                        ? 'Please update your project description to align with corporate safety policies. Remove any references to unverified external services.'
-                        : 'Describe your project idea below. AIGU will analyze keywords to determine the governance path and risk level.'}
+                        ? 'Please update your project to align with corporate safety policies. Remove any references to unverified external services.'
+                        : 'Describe your project idea below. AIGU will analyze it to determine the governance path and risk level.'}
                 </Text>
 
                 <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                    {/* Project Name Field */}
                     <Text style={{ ...theme.typography.subheader, color: theme.colors.primary, marginBottom: theme.spacing.sm }}>
+                        Project Name
+                    </Text>
+                    <TextInput
+                        style={[styles.input, {
+                            backgroundColor: theme.colors.background,
+                            color: theme.colors.textPrimary,
+                            borderColor: theme.colors.border,
+                            ...theme.typography.body,
+                            minHeight: 50
+                        }]}
+                        placeholder="e.g. Marketing GenAI Accelerator"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={projectName}
+                        onChangeText={setProjectName}
+                    />
+
+                    {/* Project Description Field */}
+                    <Text style={{ ...theme.typography.subheader, color: theme.colors.primary, marginBottom: theme.spacing.sm, marginTop: 16 }}>
                         Project Description
                     </Text>
 
@@ -32,7 +79,7 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
                             borderColor: theme.colors.border,
                             ...theme.typography.body
                         }]}
-                        placeholder="e.g. Implementing a new GenAI Accelerator for marketing..."
+                        placeholder="e.g. Implementing a new GenAI Accelerator for marketing content generation using Amazon Bedrock..."
                         placeholderTextColor={theme.colors.textSecondary}
                         multiline
                         numberOfLines={6}
@@ -41,13 +88,16 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
                     />
 
                     <TouchableOpacity
-                        style={[styles.button, { backgroundColor: theme.colors.accent }]}
-                        onPress={() => {
-                            actions.initiateIntake({ description });
-                            if (setRemediating) setRemediating(false);
-                        }}
+                        style={[styles.button, {
+                            backgroundColor: submitting ? theme.colors.border : theme.colors.accent,
+                            opacity: submitting ? 0.6 : 1
+                        }]}
+                        onPress={handleSubmit}
+                        disabled={submitting}
                     >
-                        <Text style={styles.buttonText}>{isRemediation ? 'RE-SUBMIT FOR REVIEW' : 'Submit to AIGU'}</Text>
+                        <Text style={styles.buttonText}>
+                            {submitting ? 'SUBMITTING...' : (isRemediation ? 'RE-SUBMIT FOR REVIEW' : 'Submit to AIGU')}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>

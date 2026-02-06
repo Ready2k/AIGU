@@ -83,6 +83,149 @@ Resources:
           - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
           - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
 
+  StatePostMethodIAM:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref StateResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  StateDeleteMethodIAM:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref StateResource
+      HttpMethod: DELETE
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  # Upload Resource
+  UploadResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ParentId: !GetAtt AIGUApiGateway.RootResourceId
+      PathPart: upload
+
+  UploadMethodIAM:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref UploadResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  UploadOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref UploadResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  # Files Resource
+  FilesResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ParentId: !GetAtt AIGUApiGateway.RootResourceId
+      PathPart: files
+
+  FilesMethodIAM:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref FilesResource
+      HttpMethod: GET
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  FilesOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref FilesResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  # Support Resource
+  SupportResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ParentId: !GetAtt AIGUApiGateway.RootResourceId
+      PathPart: support
+
+  SupportAskResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ParentId: !Ref SupportResource
+      PathPart: ask
+
+  SupportAskMethodIAM:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref SupportAskResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  SupportAskOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref SupportAskResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
   AdminResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -295,20 +438,45 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AIGUApiGateway}/*/*/*'
 
-  # 5. Deployment (New Logical ID V9 to force redeploy)
-  AIGUApiDeploymentV9:
+
+  # 5. Deployment (New Logical ID V10 to force redeploy with new endpoints)
+  AIGUApiDeploymentV10:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: [InvokeMethodIAM, InvokeOptionsMethod, StateMethodIAM, StateOptionsMethod, AdminListMethodIAM, AdminListOptionsMethod, ConfigMethodIAM, ConfigOptionsMethod, ModelsMethodIAM, ModelsOptionsMethod, DeltaMethodIAM, DeltaOptionsMethod, SessionsMethodIAM, SessionsOptionsMethod, GatewayResponse4XX, GatewayResponse5XX]
+    DependsOn: 
+      - InvokeMethodIAM
+      - InvokeOptionsMethod
+      - StateMethodIAM
+      - StateOptionsMethod
+      - StatePostMethodIAM
+      - StateDeleteMethodIAM
+      - UploadMethodIAM
+      - UploadOptionsMethod
+      - FilesMethodIAM
+      - FilesOptionsMethod
+      - SupportAskMethodIAM
+      - SupportAskOptionsMethod
+      - AdminListMethodIAM
+      - AdminListOptionsMethod
+      - ConfigMethodIAM
+      - ConfigOptionsMethod
+      - ModelsMethodIAM
+      - ModelsOptionsMethod
+      - DeltaMethodIAM
+      - DeltaOptionsMethod
+      - SessionsMethodIAM
+      - SessionsOptionsMethod
+      - GatewayResponse4XX
+      - GatewayResponse5XX
     Properties:
       RestApiId: !Ref AIGUApiGateway
-      Description: Add Config, Models, Delta, and Sessions endpoints
+      Description: Add upload, files, support/ask endpoints with DELETE /state
 
   AIGUApiStage:
     Type: AWS::ApiGateway::Stage
     Properties:
       StageName: v1
       RestApiId: !Ref AIGUApiGateway
-      DeploymentId: !Ref AIGUApiDeploymentV9
+      DeploymentId: !Ref AIGUApiDeploymentV10
 
 Outputs:
   ApiEndpoint:

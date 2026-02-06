@@ -249,6 +249,61 @@ export const useAiguState = (submissionId, userId) => {
         }
     };
 
+    const getUploadUrl = async (uploadData) => {
+        try {
+            console.log(`Getting upload URL for: ${uploadData.fileName}`);
+            const result = await signedFetch('/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(uploadData)
+            });
+            return result;
+        } catch (err) {
+            console.error("Failed to get upload URL", err);
+            throw err;
+        }
+    };
+
+    const listFiles = async (submissionId) => {
+        try {
+            console.log(`Listing files for submission: ${submissionId}`);
+            const result = await signedFetch(`/files?submissionId=${submissionId}&userId=${userId}`);
+            return result || [];
+        } catch (err) {
+            console.error("Failed to list files", err);
+            return [];
+        }
+    };
+
+    const askSupportAgent = async (requestData) => {
+        try {
+            console.log(`Asking support agent: ${requestData.message.substring(0, 50)}...`);
+            const result = await signedFetch('/support/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestData)
+            });
+            return result;
+        } catch (err) {
+            console.error("Support agent request failed", err);
+            throw err;
+        }
+    };
+
+    const deleteProject = async (targetSubmissionId, targetUserId) => {
+        try {
+            console.log(`Deleting project: ${targetSubmissionId} for user: ${targetUserId}`);
+            await signedFetch(`/state?submissionId=${targetSubmissionId}&userId=${targetUserId}`, {
+                method: 'DELETE'
+            });
+            console.log("Project deleted successfully");
+            return true;
+        } catch (err) {
+            console.error("Delete project failed", err);
+            return false;
+        }
+    };
+
     const governance = globalState?.governance || {};
     const status = governance.status;
     const blockers = governance.blockers || [];
@@ -279,7 +334,11 @@ export const useAiguState = (submissionId, userId) => {
             fetchModels,
             fetchSessions,
             fetchConfig,
-            adminAction
+            adminAction,
+            deleteProject,
+            getUploadUrl,
+            listFiles,
+            askSupportAgent
         },
         computed: {
             isBlocked,
