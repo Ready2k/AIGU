@@ -1,8 +1,6 @@
-pytest
-pytest-asyncio
-boto3
-moto
 langgraph
 langchain
 pydantic
 langfuse
+langgraph-checkpoint-dynamodb
+boto3

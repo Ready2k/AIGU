@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 venv/
 env/
+.env
 .pytest_cache/
 .coverage
 htmlcov/
@@ -35,3 +36,17 @@ cdk.out/
 
 # Logs
 *.log
+
+# Deployment Artifacts
+build_logic/
+debug_build/
+infra/aws/packaged-logic.yaml
+
+# UI / Node
+node_modules/
+.expo/
+web-build/
+.yarn/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

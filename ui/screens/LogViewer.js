@@ -1,36 +1,50 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { AIGU_THEME } from '../theme/ThemeConfig';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useAiguTheme } from '../theme/ThemeContext';
+import ResponsiveWrapper from '../components/ResponsiveWrapper';
 
 const LogViewer = ({ auditLog, fetchReasoning }) => {
+    const { theme } = useAiguTheme();
     // Sort reverse chronological
     const sortedLog = [...(auditLog || [])].reverse();
 
     return (
-        <ScrollView style={{ flex: 1, backgroundColor: AIGU_THEME.colors.background }}>
-            <View style={{ padding: AIGU_THEME.spacing.lg }}>
-                <Text style={{ ...AIGU_THEME.typography.header, marginBottom: AIGU_THEME.spacing.md }}>
-                    Governance Audit Trail
-                </Text>
+        <ResponsiveWrapper>
+            <View style={styles.container}>
+                <View style={styles.header}>
+                    <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary }}>
+                        Governance Audit Trail
+                    </Text>
+                    <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 4 }}>
+                        Immutable record of AI decisions and state transitions
+                    </Text>
+                </View>
 
-                {sortedLog.map((entry, index) => (
-                    <LogEntry
-                        key={`${entry.timestamp}-${index}`}
-                        entry={entry}
-                        fetchReasoning={fetchReasoning}
-                        isLast={index === sortedLog.length - 1}
-                    />
-                ))}
+                <View style={styles.list}>
+                    {sortedLog.map((entry, index) => (
+                        <LogEntry
+                            key={`${entry.timestamp}-${index}`}
+                            entry={entry}
+                            theme={theme}
+                            fetchReasoning={fetchReasoning}
+                            isLast={index === sortedLog.length - 1}
+                        />
+                    ))}
 
-                {sortedLog.length === 0 && (
-                    <Text style={AIGU_THEME.typography.caption}>No audit entries found.</Text>
-                )}
+                    {sortedLog.length === 0 && (
+                        <View style={[styles.emptyState, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                            <Text style={{ ...theme.typography.body, color: theme.colors.textSecondary }}>
+                                No audit entries found for this project.
+                            </Text>
+                        </View>
+                    )}
+                </View>
             </View>
-        </ScrollView>
+        </ResponsiveWrapper>
     );
 };
 
-const LogEntry = ({ entry, fetchReasoning, isLast }) => {
+const LogEntry = ({ entry, theme, fetchReasoning, isLast }) => {
     const [expanded, setExpanded] = useState(false);
     const [reasoning, setReasoning] = useState(null);
     const [loadingCoT, setLoadingCoT] = useState(false);
@@ -46,74 +60,68 @@ const LogEntry = ({ entry, fetchReasoning, isLast }) => {
     };
 
     const isBlockedAction = entry.action && entry.action.toLowerCase().includes("blocked");
-    const nodeColor = isBlockedAction ? AIGU_THEME.colors.error : AIGU_THEME.colors.info;
+    const nodeColor = isBlockedAction ? theme.colors.error : theme.colors.accent;
 
     return (
-        <View style={{ flexDirection: 'row', marginBottom: AIGU_THEME.spacing.xs }}>
-            {/* Timeline Line */}
-            <View style={{ alignItems: 'center', marginRight: AIGU_THEME.spacing.md }}>
-                <View style={{
-                    width: 12, height: 12, borderRadius: 6,
-                    backgroundColor: nodeColor,
-                    zIndex: 1
-                }} />
-                {!isLast && <View style={{ width: 2, flex: 1, backgroundColor: '#DDD', marginTop: -2 }} />}
+        <View style={styles.entryRow}>
+            {/* Timeline Segment */}
+            <View style={styles.timelineSegment}>
+                <View style={[styles.node, { backgroundColor: nodeColor, shadowColor: nodeColor }]} />
+                {!isLast && <View style={[styles.line, { backgroundColor: theme.colors.border }]} />}
             </View>
 
-            {/* Content */}
-            <View style={{ flex: 1, paddingBottom: AIGU_THEME.spacing.lg }}>
-                <View style={{
-                    backgroundColor: AIGU_THEME.colors.surface,
-                    padding: AIGU_THEME.spacing.md,
-                    borderRadius: AIGU_THEME.borderRadius.md,
-                    ...AIGU_THEME.shadows.card
-                }}>
-                    {/* Header */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ ...AIGU_THEME.typography.subheader, fontSize: 14 }}>{entry.agent}</Text>
-                        <Text style={AIGU_THEME.typography.caption}>
-                            {new Date(entry.timestamp).toLocaleTimeString()}
+            {/* Entry Card */}
+            <View style={styles.contentContainer}>
+                <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                    {/* Meta Header */}
+                    <View style={styles.cardHeader}>
+                        <View style={[styles.agentBadge, { backgroundColor: theme.colors.background }]}>
+                            <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '700' }]}>
+                                {entry.agent.toUpperCase()}
+                            </Text>
+                        </View>
+                        <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary }}>
+                            {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </Text>
                     </View>
 
-                    {/* Action & Reason */}
-                    <Text style={{ ...AIGU_THEME.typography.body, fontWeight: '600', marginBottom: 4 }}>
+                    {/* Action Title */}
+                    <Text style={{ ...theme.typography.subheader, color: theme.colors.textPrimary, fontSize: 16, marginBottom: 8 }}>
                         {entry.action}
                     </Text>
-                    <Text style={{ ...AIGU_THEME.typography.body, color: AIGU_THEME.colors.textSecondary }}>
+
+                    {/* Reason Text */}
+                    <Text style={{ ...theme.typography.body, color: theme.colors.textSecondary, lineHeight: 22 }}>
                         {entry.reason}
                     </Text>
 
-                    {/* Verification & CoT Toggle */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: AIGU_THEME.spacing.sm }}>
-                        {entry.signature && (
-                            <Text style={{ ...AIGU_THEME.typography.caption, color: AIGU_THEME.colors.success }}>
-                                ✓ Verified Immutable
-                            </Text>
-                        )}
+                    {/* Verification & reasoning button */}
+                    <View style={styles.cardFooter}>
+                        <View style={styles.verificationRow}>
+                            {entry.signature && (
+                                <Text style={{ ...theme.typography.caption, color: theme.colors.success, fontWeight: '600' }}>
+                                    ✓ HASH_SIGNED
+                                </Text>
+                            )}
+                        </View>
 
                         {entry.reasoningContext && (
-                            <TouchableOpacity onPress={handleToggle}>
-                                <Text style={{ ...AIGU_THEME.typography.caption, color: AIGU_THEME.colors.secondary }}>
-                                    {expanded ? "Hide Reasoning" : "View AI Logic"}
+                            <TouchableOpacity onPress={handleToggle} style={styles.reasoningBtn}>
+                                <Text style={{ ...theme.typography.caption, color: theme.colors.accent, fontWeight: '700' }}>
+                                    {expanded ? "HIDE REASONING" : "VIEW AI LOGIC"}
                                 </Text>
                             </TouchableOpacity>
                         )}
                     </View>
 
-                    {/* Expandable CoT Panel */}
+                    {/* Expandable Panel */}
                     {expanded && (
-                        <View style={{
-                            marginTop: AIGU_THEME.spacing.md,
-                            padding: AIGU_THEME.spacing.md,
-                            backgroundColor: '#F8F9FA',
-                            borderRadius: AIGU_THEME.borderRadius.sm
-                        }}>
-                            <Text style={{ ...AIGU_THEME.typography.caption, marginBottom: 8 }}>
-                                CHAIN OF THOUGHT:
+                        <View style={[styles.cotPanel, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+                            <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginBottom: 12, fontWeight: '700' }]}>
+                                🔍 CHAIN-OF-THOUGHT ANALYSIS
                             </Text>
-                            <Text style={AIGU_THEME.typography.mono}>
-                                {loadingCoT ? "Fetching from S3..." : reasoning}
+                            <Text style={[theme.typography.mono, { color: theme.colors.textPrimary, fontSize: 12, lineHeight: 18 }]}>
+                                {loadingCoT ? "Fetching from secure S3 vault..." : reasoning}
                             </Text>
                         </View>
                     )}
@@ -122,5 +130,98 @@ const LogEntry = ({ entry, fetchReasoning, isLast }) => {
         </View>
     );
 };
+
+const styles = StyleSheet.create({
+    container: {
+        maxWidth: 900,
+        width: '100%',
+        alignSelf: 'center',
+    },
+    header: {
+        marginBottom: 40
+    },
+    list: {
+        paddingLeft: 4
+    },
+    entryRow: {
+        flexDirection: 'row',
+    },
+    timelineSegment: {
+        alignItems: 'center',
+        marginRight: 24,
+        width: 12,
+    },
+    node: {
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        zIndex: 2,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 4,
+        marginTop: 6
+    },
+    line: {
+        width: 2,
+        flex: 1,
+        marginTop: -2,
+    },
+    contentContainer: {
+        flex: 1,
+        paddingBottom: 32
+    },
+    card: {
+        padding: 24,
+        borderRadius: 12,
+        borderWidth: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.03,
+        shadowRadius: 8,
+        elevation: 2
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16
+    },
+    agentBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    cardFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 20,
+        paddingTop: 16,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.05)'
+    },
+    verificationRow: {
+        flexDirection: 'row',
+        alignItems: 'center'
+    },
+    reasoningBtn: {
+        paddingVertical: 4,
+        paddingHorizontal: 8
+    },
+    cotPanel: {
+        marginTop: 20,
+        padding: 16,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderStyle: 'dashed'
+    },
+    emptyState: {
+        padding: 40,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        alignItems: 'center'
+    }
+});
 
 export default LogViewer;

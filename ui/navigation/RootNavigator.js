@@ -13,10 +13,20 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
     // 1. Session Recovery & State Subscription via Hook
     const { state, loading, actions, computed } = useAiguState(submissionId, userId);
 
-    if (loading || !state) {
+    if (loading || (!state && !state?.error)) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                 <ActivityIndicator size="large" color={AIGU_THEME.colors.primary} />
+            </View>
+        );
+    }
+
+    if (state?.error || (!state && !loading)) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                <Text style={{ ...AIGU_THEME.typography.header, color: AIGU_THEME.colors.error }}>Connection Error</Text>
+                <Text style={{ marginBottom: 20 }}>{state?.error?.message || "Failed to load state."}</Text>
+                <Text>Check console for CORS or Network details.</Text>
             </View>
         );
     }

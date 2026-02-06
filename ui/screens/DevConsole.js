@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, ScrollView, Alert } from 'react-native';
-import { AIGU_THEME } from '../theme/ThemeConfig';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { useAiguTheme } from '../theme/ThemeContext';
+import ResponsiveWrapper from '../components/ResponsiveWrapper';
 import { saveCredentials, getCredentials } from '../utils/auth';
 
 const DevConsole = ({ onClose }) => {
+    const { theme } = useAiguTheme();
     const [accessKey, setAccessKey] = useState('');
     const [secretKey, setSecretKey] = useState('');
     const [sessionToken, setSessionToken] = useState('');
@@ -40,61 +42,115 @@ const DevConsole = ({ onClose }) => {
     };
 
     return (
-        <ScrollView style={{ flex: 1, padding: AIGU_THEME.spacing.lg, backgroundColor: AIGU_THEME.colors.background }}>
-            <View style={{ marginBottom: AIGU_THEME.spacing.xl }}>
-                <Text style={{ ...AIGU_THEME.typography.header, color: AIGU_THEME.colors.primary }}>
-                    Developer Console 🛠️
-                </Text>
-                <Text style={AIGU_THEME.typography.caption}>
-                    Enter temporary AWS Landing Zone credentials to enable E2E testing.
-                    These are stored securely in local storage and never synced.
-                </Text>
-            </View>
+        <ResponsiveWrapper>
+            <View style={styles.container}>
+                <View style={styles.header}>
+                    <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary }}>
+                        Developer Console 🛠️
+                    </Text>
+                    <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 8 }}>
+                        Enter temporary AWS Landing Zone credentials to enable E2E testing.
+                        These are stored securely in local storage and never synced.
+                    </Text>
+                </View>
 
-            <InputModule label="Access Key ID" value={accessKey} onChange={setAccessKey} />
-            <InputModule label="Secret Access Key" value={secretKey} onChange={setSecretKey} secure />
-            <InputModule label="Session Token" value={sessionToken} onChange={setSessionToken} multiline />
+                <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                    <InputModule label="Access Key ID" value={accessKey} onChange={setAccessKey} theme={theme} />
+                    <InputModule label="Secret Access Key" value={secretKey} onChange={setSecretKey} secure theme={theme} />
+                    <InputModule label="Session Token" value={sessionToken} onChange={setSessionToken} multiline theme={theme} />
 
-            <View style={{ marginTop: AIGU_THEME.spacing.lg }}>
-                <Button
-                    title={loading ? "Saving..." : "Save Credentials"}
-                    onPress={handleSave}
-                    color={AIGU_THEME.colors.secondary}
-                />
-            </View>
+                    <View style={styles.actions}>
+                        <TouchableOpacity
+                            style={[styles.saveButton, { backgroundColor: theme.colors.secondary }]}
+                            onPress={handleSave}
+                        >
+                            <Text style={styles.buttonText}>{loading ? "Saving..." : "Save Credentials"}</Text>
+                        </TouchableOpacity>
 
-            <View style={{ marginTop: AIGU_THEME.spacing.md }}>
-                <Button
-                    title="Close"
-                    onPress={onClose}
-                    color={AIGU_THEME.colors.textSecondary}
-                />
+                        <TouchableOpacity
+                            style={[styles.closeButton, { borderColor: theme.colors.border }]}
+                            onPress={onClose}
+                        >
+                            <Text style={{ color: theme.colors.textSecondary, fontWeight: '600' }}>Close Console</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </View>
-        </ScrollView>
+        </ResponsiveWrapper>
     );
 };
 
-const InputModule = ({ label, value, onChange, secure, multiline }) => (
-    <View style={{ marginBottom: AIGU_THEME.spacing.md }}>
-        <Text style={{ ...AIGU_THEME.typography.subheader, fontSize: 14, marginBottom: AIGU_THEME.spacing.sm }}>
-            {label}
+const InputModule = ({ label, value, onChange, secure, multiline, theme }) => (
+    <View style={styles.inputContainer}>
+        <Text style={{ ...theme.typography.subheader, fontSize: 13, color: theme.colors.textSecondary, marginBottom: 8 }}>
+            {label.toUpperCase()}
         </Text>
         <TextInput
-            style={{
-                backgroundColor: AIGU_THEME.colors.surface,
-                padding: AIGU_THEME.spacing.md,
-                borderRadius: AIGU_THEME.borderRadius.sm,
-                ...AIGU_THEME.shadows.card,
-                height: multiline ? 100 : 50
-            }}
+            style={[styles.input, {
+                backgroundColor: theme.colors.background,
+                color: theme.colors.textPrimary,
+                borderColor: theme.colors.border,
+                ...theme.typography.mono,
+                height: multiline ? 120 : 50
+            }]}
             value={value}
             onChangeText={onChange}
             secureTextEntry={secure}
             multiline={multiline}
             placeholder={`Enter ${label}`}
-            placeholderTextColor="#999"
+            placeholderTextColor={theme.colors.textSecondary + '80'}
+            textAlignVertical={multiline ? 'top' : 'center'}
         />
     </View>
 );
+
+const styles = StyleSheet.create({
+    container: {
+        maxWidth: 650,
+        width: '100%',
+        alignSelf: 'center',
+    },
+    header: {
+        marginBottom: 32
+    },
+    card: {
+        padding: 32,
+        borderRadius: 12,
+        borderWidth: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 3
+    },
+    inputContainer: {
+        marginBottom: 20
+    },
+    input: {
+        borderWidth: 1,
+        borderRadius: 6,
+        padding: 14,
+    },
+    actions: {
+        marginTop: 24
+    },
+    saveButton: {
+        paddingVertical: 14,
+        borderRadius: 6,
+        alignItems: 'center',
+        marginBottom: 12
+    },
+    closeButton: {
+        paddingVertical: 14,
+        borderRadius: 6,
+        borderWidth: 1,
+        alignItems: 'center'
+    },
+    buttonText: {
+        color: '#FFFFFF',
+        fontWeight: '700',
+        fontSize: 16
+    }
+});
 
 export default DevConsole;

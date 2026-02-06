@@ -12,8 +12,7 @@ Resources:
         Types:
           - REGIONAL
 
-  # 2. Resources & Methods (Proxy to Lambda)
-  # Path: /invoke (POST) - Trigger Agents
+  # 2. Resources & Methods (Proxy to Lambda using ANY)
   InvokeResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -26,7 +25,7 @@ Resources:
     Properties:
       RestApiId: !Ref AIGUApiGateway
       ResourceId: !Ref InvokeResource
-      HttpMethod: POST
+      HttpMethod: ANY
       AuthorizationType: NONE
       Integration:
         Type: AWS_PROXY
@@ -35,7 +34,6 @@ Resources:
           - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
           - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
 
-  # Path: /state (GET) - Fetch State
   StateResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -48,7 +46,7 @@ Resources:
     Properties:
       RestApiId: !Ref AIGUApiGateway
       ResourceId: !Ref StateResource
-      HttpMethod: GET
+      HttpMethod: ANY
       AuthorizationType: NONE
       Integration:
         Type: AWS_PROXY
@@ -66,19 +64,20 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AIGUApiGateway}/*/*/*'
 
-  # 4. Deployment
-  AIGUApiDeployment:
+  # 4. Deployment (New Logical ID V3 to force redeploy)
+  AIGUApiDeploymentV3:
     Type: AWS::ApiGateway::Deployment
     DependsOn: [InvokeMethod, StateMethod]
     Properties:
       RestApiId: !Ref AIGUApiGateway
+      Description: Update to ANY method for full proxy coverage including CORS
 
   AIGUApiStage:
     Type: AWS::ApiGateway::Stage
     Properties:
       StageName: v1
       RestApiId: !Ref AIGUApiGateway
-      DeploymentId: !Ref AIGUApiDeployment
+      DeploymentId: !Ref AIGUApiDeploymentV3
 
 Outputs:
   ApiEndpoint:

@@ -1,5 +1,16 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: AIGU Logic Layer (Brain) - LangGraph Lambda and Bedrock Access
+Parameters:
+  LangFuseSecretKey:
+    Type: String
+    NoEcho: true
+    Description: LangFuse Secret Key
+  LangFusePublicKey:
+    Type: String
+    Description: LangFuse Public Key
+  LangFuseHost:
+    Type: String
+    Description: LangFuse Host URL (e.g. cloud.langfuse.com)
 
 Resources:
   # 1. IAM Role for LangGraph Execution
@@ -24,6 +35,8 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
                   - dynamodb:Query
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:DeleteItem
                 Resource:
                   - !Sub 
                     - 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}'
@@ -31,6 +44,12 @@ Resources:
                   - !Sub 
                     - 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}'
                     - TableName: !ImportValue AIGU-SystemConfigTableName
+                  - !Sub 
+                    - 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}'
+                    - TableName: !ImportValue AIGU-CheckpointsTableName
+                  - !Sub 
+                    - 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}'
+                    - TableName: !ImportValue AIGU-WritesTableName
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -74,10 +93,12 @@ Resources:
           DYNAMODB_TABLE_NAME: !ImportValue AIGU-GlobalStateTableName
           CONFIG_TABLE_NAME: !ImportValue AIGU-SystemConfigTableName
           ARTIFACT_BUCKET: !ImportValue AIGU-ArtifactBucketName
-      Code:
-        ZipFile: |
-          def lambda_handler(event, context):
-              return {"statusCode": 200, "body": "Placeholder for CI/CD deployment"}
+          CHECKPOINTS_TABLE_NAME: !ImportValue AIGU-CheckpointsTableName
+          WRITES_TABLE_NAME: !ImportValue AIGU-WritesTableName
+          LANGFUSE_SECRET_KEY: !Ref LangFuseSecretKey
+          LANGFUSE_PUBLIC_KEY: !Ref LangFusePublicKey
+          LANGFUSE_HOST: !Ref LangFuseHost
+      Code: ../../build_logic
 
 Outputs:
   LangGraphFunctionArn:
