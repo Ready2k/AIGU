@@ -29,7 +29,7 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     action = "Path set to Standard (Default)"
     reason = "Default standard governance path"
     # Multi-Stage Support: If project is already past Intake, pass through
-    if existing_stage != "Intake" and existing_metadata.get("path") in ["Accelerator", "BAU", "Standard"]:
+    if existing_stage != "Intake" and existing_metadata.get("path") in ["Accelerator", "Standard"]:
         cot_steps.append(f"Project already in {existing_stage} stage. Passing through.")
         return {
             "projectMetadata": existing_metadata,

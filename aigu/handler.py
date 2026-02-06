@@ -70,10 +70,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
                 
                 project_id = submission_id
-                print(f"Attempting to persist state for project: {project_id}")
+                # Ensure userId is a string for DynamoDB sort key
+                effective_userId = user_id if user_id and user_id != 'null' else "anonymous"
+                
+                print(f"Attempting to persist initial state for project: {project_id}")
                 state_table.put_item(Item={
                     "submissionId": submission_id,
-                    "userId": user_id,
+                    "userId": effective_userId,
                     "artifacts": {"intakeData": inner_payload},
                     "projectMetadata": {"currentStage": "Intake", "path": "Pending"},
                     "governance": {"status": "Draft"},
@@ -82,30 +85,42 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
             graph_input = {
                 "submissionId": submission_id,
-                "userId": user_id
+                "userId": user_id if user_id and user_id != 'null' else "anonymous"
             }
 
             if agent == "intake":
                 graph_input["artifacts"] = {"intakeData": inner_payload}
-            elif agent == "outcome" or agent == "handover":
-                graph_input["governance"] = {"status": "Approved" if inner_payload.get("scopeAck") else "Blocked"}
             elif agent == "admin_action":
                 action = inner_payload.get("action")
                 print(f"Applying Admin Action: {action} for {submission_id}")
+                
+                # Fetch current state from Global State table to ensure we have the whole picture
+                import boto3
+                dynamodb = boto3.resource('dynamodb')
+                state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+                response = state_table.get_item(Key={"submissionId": submission_id, "userId": graph_input["userId"]})
+                current_state = response.get("Item", {})
+                
+                # Merge Admin Action into Governance
+                new_gov = current_state.get("governance", {}).copy()
                 if action == "ADMIN_APPROVE":
-                    graph_input["governance"] = {
+                    new_gov.update({
                         "status": "Approved",
                         "adminApproved": True,
                         "adminAction": "ADMIN_APPROVE"
-                    }
+                    })
                 elif action == "ADMIN_REQUEST_INFO":
                     msg = inner_payload.get("message", "Missing Information")
-                    graph_input["governance"] = {
+                    new_gov.update({
                         "status": "Blocked",
                         "adminAction": "ADMIN_REQUEST_INFO",
                         "adminMessage": msg,
                         "blockers": [f"Admin Request: {msg}"]
-                    }
+                    })
+                
+                graph_input["governance"] = new_gov
+            elif agent == "outcome" or agent == "handover":
+                graph_input["governance"] = {"status": "Approved" if inner_payload.get("scopeAck") else "Blocked"}
             elif agent == "production":
                 # Handle production resubmission with delta calculation
                 previous_version_id = inner_payload.get("previousVersionId")
@@ -118,21 +133,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     
                     try:
                         # Fetch previous version
-                        prev_response = state_table.get_item(Key={"submissionId": previous_version_id})
+                        prev_response = state_table.get_item(Key={"submissionId": previous_version_id, "userId": graph_input["userId"]})
                         if "Item" in prev_response:
                             from aigu.delta_calculator import get_delta_details
                             previous_state = prev_response["Item"]
                             
                             # Fetch current state (to combine with new data)
-                            curr_response = state_table.get_item(Key={"submissionId": submission_id})
+                            curr_response = state_table.get_item(Key={"submissionId": submission_id, "userId": graph_input["userId"]})
                             current_state = curr_response.get("Item", {})
                             
                             # Temp state for delta calculation
                             temp_state = json.loads(json.dumps(current_state))
                             if "artifacts" not in temp_state: temp_state["artifacts"] = {}
-                            # Update with new intake data if present, or existing
-                            # For production, we usually compare the intake data (scope)
-                            # but we can also compare technical design.
                             
                             delta_details = get_delta_details(temp_state, previous_state)
                             delta_pct = delta_details["deltaPercentage"]
@@ -155,21 +167,23 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
             # Pass trace callbacks and metadata
             print(f"Invoking graph with input: {json.dumps(graph_input, default=str)}")
-            # LangGraph handles persistence via the DynamoDBSaver checkpointer configured in graph.py
             result = app.invoke(
                 graph_input, 
                 config={**config, "callbacks": [langfuse_handler], "metadata": metadata}
             )
-            print(f"Graph result: {json.dumps(result, default=str)}")
+            print(f"Graph result keys: {list(result.keys())}")
             
-            # For admin actions, explicitly update the Global State table
-            if agent == "admin_action":
-                import boto3
-                dynamodb = boto3.resource('dynamodb')
-                state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
-                
-                print(f"Updating Global State for {submission_id} with status: {result.get('governance', {}).get('status')}")
-                state_table.put_item(Item=result)
+            # For admin actions & persistent state sync, update the Global State table
+            import boto3
+            dynamodb = boto3.resource('dynamodb')
+            state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+            
+            # Ensure submissionId and userId are present in the result for the put_item key requirement
+            if "submissionId" not in result: result["submissionId"] = submission_id
+            if "userId" not in result: result["userId"] = graph_input["userId"]
+            
+            print(f"Updating Global State for {submission_id} (Status: {result.get('governance', {}).get('status')})")
+            state_table.put_item(Item=result)
             
             if hasattr(langfuse_handler, "client"):
                 langfuse_handler.client.flush()

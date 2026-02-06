@@ -60,7 +60,7 @@ const SupportStatus = ({ state, onViewLog, refresh }) => {
                                 </Text>
                             ))}
 
-                            {governance.remediation && (
+                            {!!governance.remediation && (
                                 <View style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(209, 50, 18, 0.2)' }}>
                                     <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, fontWeight: '700', marginBottom: 4 }}>
                                         🛠️ How to Fix:

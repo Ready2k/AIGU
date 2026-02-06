@@ -234,6 +234,7 @@ const AdminQueue = ({ actions }) => {
                             const missingArtifacts = extractMissingArtifacts(blockers);
                             const isExpanded = expandedReasoningCards[item.submissionId];
                             const previousVersionId = item.projectMetadata?.previousVersionId;
+                            const userId = (item.userId && item.userId !== 'null') ? item.userId : "Unknown User";
 
                             return (
                                 <View
@@ -291,7 +292,7 @@ const AdminQueue = ({ actions }) => {
                                         {/* User & Submission Info */}
                                         <View style={{ marginTop: 12, padding: 10, backgroundColor: theme.colors.background, borderRadius: 6 }}>
                                             <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary }}>
-                                                <Text style={{ fontWeight: '700' }}>Submitted by:</Text> {item.userId || "Unknown User"} |
+                                                <Text style={{ fontWeight: '700' }}>Submitted by:</Text> {userId} |
                                                 <Text style={{ fontWeight: '700' }}> ID:</Text> {item.submissionId} |
                                                 <Text style={{ fontWeight: '700' }}> Deadline:</Text> {deadline || 'TBD'}
                                             </Text>
@@ -310,7 +311,7 @@ const AdminQueue = ({ actions }) => {
                                         )}
 
                                         {/* Agent Reasoning - Expandable */}
-                                        {agentMessage && (
+                                        {!!agentMessage && (
                                             <View style={{ marginTop: 12 }}>
                                                 <TouchableOpacity
                                                     onPress={() => toggleReasoningExpansion(item.submissionId)}
@@ -403,7 +404,7 @@ const AdminQueue = ({ actions }) => {
 
                                     {/* Action Buttons */}
                                     <View style={styles.actions}>
-                                        {previousVersionId && (
+                                        {!!previousVersionId && (
                                             <TouchableOpacity
                                                 style={[styles.btn, { backgroundColor: '#6c757d', marginRight: 12 }]}
                                                 onPress={() => handleViewDelta(item)}
