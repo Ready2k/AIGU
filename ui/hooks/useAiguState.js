@@ -172,6 +172,16 @@ export const useAiguState = (submissionId, userId) => {
         }
     };
 
+    const fetchSessions = async (targetUserId) => {
+        try {
+            console.log(`Fetching sessions for user: ${targetUserId}`);
+            return await signedFetch(`/sessions?userId=${targetUserId}`);
+        } catch (err) {
+            console.error("Failed to fetch sessions", err);
+            return [];
+        }
+    };
+
     const fetchConfig = async () => {
         try {
             return await signedFetch('/config', { method: 'GET' });
@@ -267,6 +277,7 @@ export const useAiguState = (submissionId, userId) => {
             fetchAdminQueue,
             fetchDelta,
             fetchModels,
+            fetchSessions,
             fetchConfig,
             adminAction
         },

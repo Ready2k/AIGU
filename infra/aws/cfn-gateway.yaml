@@ -230,6 +230,41 @@ Resources:
           - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
           - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
 
+  SessionsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ParentId: !GetAtt AIGUApiGateway.RootResourceId
+      PathPart: sessions
+
+  SessionsMethodIAM:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref SessionsResource
+      HttpMethod: GET
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  SessionsOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref SessionsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
   # 3. Gateway Responses (Enable CORS for IAM Rejection)
   GatewayResponse4XX:
     Type: AWS::ApiGateway::GatewayResponse
@@ -260,20 +295,20 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AIGUApiGateway}/*/*/*'
 
-  # 5. Deployment (New Logical ID V8 to force redeploy)
-  AIGUApiDeploymentV8:
+  # 5. Deployment (New Logical ID V9 to force redeploy)
+  AIGUApiDeploymentV9:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: [InvokeMethodIAM, InvokeOptionsMethod, StateMethodIAM, StateOptionsMethod, AdminListMethodIAM, AdminListOptionsMethod, ConfigMethodIAM, ConfigOptionsMethod, ModelsMethodIAM, ModelsOptionsMethod, DeltaMethodIAM, DeltaOptionsMethod, GatewayResponse4XX, GatewayResponse5XX]
+    DependsOn: [InvokeMethodIAM, InvokeOptionsMethod, StateMethodIAM, StateOptionsMethod, AdminListMethodIAM, AdminListOptionsMethod, ConfigMethodIAM, ConfigOptionsMethod, ModelsMethodIAM, ModelsOptionsMethod, DeltaMethodIAM, DeltaOptionsMethod, SessionsMethodIAM, SessionsOptionsMethod, GatewayResponse4XX, GatewayResponse5XX]
     Properties:
       RestApiId: !Ref AIGUApiGateway
-      Description: Add Config, Models, Delta endpoints
+      Description: Add Config, Models, Delta, and Sessions endpoints
 
   AIGUApiStage:
     Type: AWS::ApiGateway::Stage
     Properties:
       StageName: v1
       RestApiId: !Ref AIGUApiGateway
-      DeploymentId: !Ref AIGUApiDeploymentV8
+      DeploymentId: !Ref AIGUApiDeploymentV9
 
 Outputs:
   ApiEndpoint:

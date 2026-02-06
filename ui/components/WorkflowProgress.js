@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 
 /**
@@ -49,8 +49,77 @@ const WorkflowProgress = ({ state }) => {
     const currentIndex = allStages.findIndex(s => s.key === currentStage);
     const activeIndex = currentIndex >= 0 ? currentIndex : 0;
 
+    const [selectedStep, setSelectedStep] = React.useState(null);
+
+    const handleStagePress = (stage) => {
+        // Extract CoT and Artifacts for this stage
+        const cot = (state.chainOfThought || []).filter(c =>
+            c.agent?.toLowerCase() === stage.key.toLowerCase() ||
+            (stage.key === 'Intake' && c.agent === 'Intake Orchestrator')
+        );
+
+        let stageArtifacts = null;
+        if (stage.key === 'Intake') stageArtifacts = state.artifacts?.intakeData;
+        if (stage.key === 'POC') stageArtifacts = state.artifacts?.pocData;
+        if (stage.key === 'Production') stageArtifacts = state.artifacts?.productionData;
+
+        setSelectedStep({
+            ...stage,
+            cot,
+            artifacts: stageArtifacts
+        });
+    };
+
     return (
         <View style={styles.container}>
+            {/* Step Details Modal */}
+            {selectedStep && (
+                <View style={[StyleSheet.absoluteFill, { zIndex: 1000, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+                    <View style={[styles.modalContent, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[theme.typography.header, { color: theme.colors.primary }]}>{selectedStep.label}</Text>
+                            <TouchableOpacity onPress={() => setSelectedStep(null)}>
+                                <Text style={{ color: theme.colors.textSecondary, fontSize: 24 }}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={{ maxHeight: 500 }}>
+                            <Text style={[styles.modalSectionTitle, { color: theme.colors.textSecondary }]}>AGENT REASONING (CoT)</Text>
+                            {selectedStep.cot.length > 0 ? selectedStep.cot.map((c, i) => (
+                                <View key={i} style={[styles.cotBlock, { backgroundColor: theme.colors.background }]}>
+                                    <Text style={[theme.typography.caption, { color: theme.colors.accent, fontWeight: '700' }]}>DECISION: {c.decision || c.action}</Text>
+                                    <Text style={[theme.typography.body, { color: theme.colors.textPrimary, marginTop: 4, fontSize: 13 }]}>{c.reason || 'Decision processed.'}</Text>
+                                    <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 8 }]}>{new Date(c.timestamp).toLocaleString()}</Text>
+                                </View>
+                            )) : (
+                                <Text style={{ color: theme.colors.textSecondary, fontStyle: 'italic', marginBottom: 20 }}>No reasoning recorded for this stage yet.</Text>
+                            )}
+
+                            <Text style={[styles.modalSectionTitle, { color: theme.colors.textSecondary, marginTop: 16 }]}>SUBMITTED ARTIFACTS</Text>
+                            {selectedStep.artifacts ? (
+                                <View style={[styles.artifactBlock, { borderColor: theme.colors.border }]}>
+                                    {Object.entries(selectedStep.artifacts).map(([k, v]) => (
+                                        <View key={k} style={{ marginBottom: 8 }}>
+                                            <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '700' }]}>{k.toUpperCase()}</Text>
+                                            <Text style={[theme.typography.body, { color: theme.colors.textPrimary, fontSize: 12 }]}>{typeof v === 'string' ? v : JSON.stringify(v)}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            ) : (
+                                <Text style={{ color: theme.colors.textSecondary, fontStyle: 'italic' }}>No artifacts associated with this stage.</Text>
+                            )}
+                        </ScrollView>
+
+                        <TouchableOpacity
+                            style={[styles.closeButton, { backgroundColor: theme.colors.primary }]}
+                            onPress={() => setSelectedStep(null)}
+                        >
+                            <Text style={styles.closeButtonText}>CLOSE INSIGHTS</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
+
             {/* Path Indicator */}
             <View style={styles.pathHeader}>
                 <View style={[styles.pathBadge, {
@@ -80,7 +149,11 @@ const WorkflowProgress = ({ state }) => {
                     return (
                         <View key={stage.key}>
                             {/* Stage Node */}
-                            <View style={styles.stageRow}>
+                            <TouchableOpacity
+                                style={styles.stageRow}
+                                onPress={() => handleStagePress(stage)}
+                                activeOpacity={0.7}
+                            >
                                 {/* Stage Circle */}
                                 <View style={[
                                     styles.stageCircle,
@@ -131,7 +204,7 @@ const WorkflowProgress = ({ state }) => {
                                         )}
                                     </View>
                                 </View>
-                            </View>
+                            </TouchableOpacity>
 
                             {/* Connector Line */}
                             {index < allStages.length - 1 && (
@@ -313,6 +386,47 @@ const styles = StyleSheet.create({
         height: 12,
         borderRadius: 6,
         marginRight: 6
+    },
+    modalContent: {
+        width: '90%',
+        maxWidth: 600,
+        padding: 24,
+        borderRadius: 16,
+        borderWidth: 1,
+        maxHeight: '80%'
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20
+    },
+    modalSectionTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        letterSpacing: 1,
+        marginBottom: 12
+    },
+    cotBlock: {
+        padding: 16,
+        borderRadius: 8,
+        marginBottom: 12
+    },
+    artifactBlock: {
+        padding: 16,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderStyle: 'dashed'
+    },
+    closeButton: {
+        marginTop: 24,
+        paddingVertical: 14,
+        borderRadius: 8,
+        alignItems: 'center'
+    },
+    closeButtonText: {
+        color: '#FFF',
+        fontWeight: '700'
     }
 });
 

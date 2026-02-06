@@ -165,6 +165,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 graph_input["artifacts"] = {
                     "productionData": inner_payload.get("productionData", {})
                 }
+            elif agent == "poc":
+                graph_input["artifacts"] = {
+                    "pocData": inner_payload.get("pocData", {})
+                }
             else:
                 graph_input.update(payload)
 
@@ -230,6 +234,28 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "statusCode": 200,
                 "headers": headers,
                 "body": json.dumps(enriched_queue, default=str)
+            }
+
+        # --- PATH: /sessions ---
+        elif "/sessions" in path:
+            import boto3
+            dynamodb = boto3.resource('dynamodb')
+            state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+            
+            user_id = query_params.get("userId")
+            if not user_id:
+                return {"statusCode": 400, "headers": headers, "body": json.dumps({"error": "userId required"})}
+            
+            # Use Scan with FilterExpression for user specific sessions
+            # In production, a GSI on userId would be more efficient
+            from boto3.dynamodb.conditions import Attr
+            response = state_table.scan(FilterExpression=Attr('userId').eq(user_id))
+            items = response.get('Items', [])
+            
+            return {
+                "statusCode": 200,
+                "headers": headers,
+                "body": json.dumps(items, default=str)
             }
 
         # --- PATH: /delta ---

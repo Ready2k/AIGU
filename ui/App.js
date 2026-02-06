@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, SafeAreaView, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import RootNavigator from './navigation/RootNavigator';
+import SessionLobby from './screens/SessionLobby';
 import DevConsole from './screens/DevConsole';
+import NavigationBreadcrumbs from './components/NavigationBreadcrumbs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useAiguTheme } from './theme/ThemeContext';
 import { useAiguState } from './hooks/useAiguState';
@@ -9,18 +11,23 @@ import { useAiguState } from './hooks/useAiguState';
 function AppContent() {
     const { theme } = useAiguTheme();
 
-    // Simple Session Simulation for Demo
-    const [submissionId, setSubmissionId] = useState('test-123');
+    const [submissionId, setSubmissionId] = useState(null);
     const [userId, setUserId] = useState('demo-user-123');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [showDevConsole, setShowDevConsole] = useState(false);
 
-    // Global Actions for Config/Models discovery even before login
-    const { actions } = useAiguState(submissionId, userId);
+    const isAdmin = userId.toLowerCase() === 'admin';
+    const { actions } = useAiguState(submissionId || 'temp', userId);
 
     if (showDevConsole) {
         return <DevConsole actions={actions} onClose={() => setShowDevConsole(false)} />;
     }
+
+    const handleBackToLobby = () => setSubmissionId(null);
+    const handleLogout = () => {
+        setIsLoggedIn(false);
+        setSubmissionId(null);
+    };
 
     if (!isLoggedIn) {
         return (
@@ -47,20 +54,7 @@ function AppContent() {
                             }]}
                             value={userId}
                             onChangeText={setUserId}
-                            placeholder="e.g. admin or your name"
-                            placeholderTextColor={theme.colors.textSecondary}
-                        />
-
-                        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Submission ID</Text>
-                        <TextInput
-                            style={[styles.input, {
-                                backgroundColor: theme.mode === 'dark' ? theme.colors.background : '#F9FAFB',
-                                color: theme.colors.textPrimary,
-                                borderColor: theme.colors.border
-                            }]}
-                            value={submissionId}
-                            onChangeText={setSubmissionId}
-                            placeholder="e.g. project-x-123"
+                            placeholder="e.g. jcregeen or your name"
                             placeholderTextColor={theme.colors.textSecondary}
                         />
                     </View>
@@ -83,9 +77,36 @@ function AppContent() {
         );
     }
 
+    if (!submissionId && !isAdmin) {
+        return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+                <NavigationBreadcrumbs
+                    userId={userId}
+                    projectName="Project Selection"
+                    currentStage="Lobby"
+                    isAdmin={false}
+                    onBackToLobby={handleBackToLobby}
+                    onLogout={handleLogout}
+                />
+                <SessionLobby
+                    userId={userId}
+                    actions={actions}
+                    onSelectSession={(id) => setSubmissionId(id)}
+                    onNewSession={() => setSubmissionId(`proj-${Date.now()}`)}
+                />
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
-            <RootNavigator submissionId={submissionId} userId={userId} isAdmin={userId.toLowerCase() === 'admin'} />
+            <RootNavigator
+                submissionId={submissionId || 'admin-global'}
+                userId={userId}
+                isAdmin={isAdmin}
+                onBackToLobby={handleBackToLobby}
+                onLogout={handleLogout}
+            />
         </SafeAreaView>
     );
 }

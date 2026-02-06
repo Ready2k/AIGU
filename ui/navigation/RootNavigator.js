@@ -12,9 +12,10 @@ import LogViewer from '../screens/LogViewer';
 import DevConsole from '../screens/DevConsole';
 import AdminQueue from '../screens/AdminQueue';
 import LifecycleSubmission from '../screens/LifecycleSubmission';
+import NavigationBreadcrumbs from '../components/NavigationBreadcrumbs';
 import { TouchableOpacity } from 'react-native';
 
-const RootNavigator = ({ submissionId, userId, isAdmin }) => {
+const RootNavigator = ({ submissionId, userId, isAdmin, onBackToLobby, onLogout }) => {
     // 1. Session Recovery & State Subscription via Hook
     const { state, loading, actions, computed, error } = useAiguState(submissionId, userId);
     const [showLogs, setShowLogs] = React.useState(false);
@@ -24,6 +25,11 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
     const renderContent = () => {
         if (showDevConsole) {
             return <DevConsole actions={actions} onClose={() => setShowDevConsole(false)} />;
+        }
+
+        // 2. Admin Override - Priority
+        if (isAdmin) {
+            return <AdminQueue actions={actions} />;
         }
 
         if (!state && loading) {
@@ -49,11 +55,6 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
                     <Text style={{ color: AIGU_THEME.colors.textSecondary }}>Check console for CORS or Network details.</Text>
                 </View>
             );
-        }
-
-        // 2. Admin Override
-        if (isAdmin) {
-            return <AdminQueue actions={actions} />;
         }
 
         // --- View Shared Log View (Priority) ---
@@ -117,6 +118,14 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
 
     return (
         <View style={{ flex: 1 }}>
+            <NavigationBreadcrumbs
+                userId={userId}
+                projectName={state?.projectMetadata?.name || state?.artifacts?.intakeData?.projectName}
+                currentStage={computed.currentStage}
+                isAdmin={isAdmin}
+                onBackToLobby={onBackToLobby}
+                onLogout={onLogout}
+            />
             {renderContent()}
             {loading && !!state && (
                 <View style={styles.overlay}>

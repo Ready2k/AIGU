@@ -29,7 +29,14 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     """
     intake_data = state.get("artifacts", {}).get("intakeData", {})
     description = intake_data.get("description", "")
-    project_name = intake_data.get("projectName", "Unknown Project")
+    project_name = intake_data.get("projectName")
+    
+    if not project_name or project_name == "Unknown Project":
+        # Extract name from first 50 chars of description
+        clean_desc = description.strip().replace("\n", " ")
+        project_name = (clean_desc[:47] + "...") if len(clean_desc) > 50 else clean_desc
+        if not project_name:
+            project_name = "Untitled Project"
     submission_id = state.get("submissionId", "unknown-submission")
 
     existing_metadata = state.get("projectMetadata", {})
