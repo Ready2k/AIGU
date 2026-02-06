@@ -36,7 +36,10 @@ This schema is designed to support the **LangGraph** "Brain" and ensure the **Su
       "timestamp": "2026-02-05T22:00:00Z",
       "agent": "Risk & Triage",
       "action": "Elevated to High Risk",
-      "reason": "GenAI Model used"
+      "reason": "GenAI Model used",
+      "reasoningContext": "s3://aigu-artifacts/reasoning/uuid-123/risk-step-1.txt", // Full CoT
+      "signature": "sha256-hash-of-entry", // Immutable verification
+      "userIdentity": "arn:aws:sts::123:assumed-role/FederatedUser/jim" // HITL Attribution
     }
   ]
 }

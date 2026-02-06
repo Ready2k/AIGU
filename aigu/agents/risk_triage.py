@@ -1,58 +1,65 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Literal
 from aigu.state import GlobalState, AuditLogEntry
+from aigu.utils import upload_reasoning_to_s3, generate_audit_signature, get_current_user_identity
 
 def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
-    """
-    Risk & Triage Agent Node.
-    Analyzes project details to assign Risk Level and SLA Deadlines.
-    Ref: agents/risk_triage.md
-    """
-    intake_data = state.get("artifacts", {}).get("intakeData", {})
-    description = intake_data.get("description", "").lower()
-    path = state.get("projectMetadata", {}).get("path", "BAU")
+    project_metadata = state.get("projectMetadata", {})
+    description = state.get("artifacts", {}).get("intakeData", {}).get("description", "").lower()
+    path = project_metadata.get("path", "Stop")
+    submission_id = state.get("submissionId", "unknown")
     
     risk_level: Literal["Low", "Med", "High"] = "Low"
     sla_days = 3
     
-    # Logic based on agents/risk_triage.md
+    cot_steps = [
+        f"Path: {path}",
+        "Evaluating usage of LLMs, Internal Data, or New Implementation context..."
+    ]
+
     if path == "Accelerator" or "genai" in description or "llm" in description:
         risk_level = "High"
         sla_days = 10
+        cot_steps.append("High Risk detected due to Accelerator path or GenAI terms.")
     elif "internal data" in description or "new implementation" in description:
         risk_level = "Med"
         sla_days = 7
+        cot_steps.append("Medium Risk detected due to internal data usage.")
     else:
-        # Default Low
         risk_level = "Low"
         sla_days = 3
+        cot_steps.append("Defaulting to Low Risk.")
         
-    # Calculate Deadline
-    # For simulation purposes, we set a fixed date relative to "now". 
-    # In a real app, this would be strictly business days.
     deadline_date = datetime.now(timezone.utc) + timedelta(days=sla_days)
     sla_deadline_str = deadline_date.date().isoformat()
+    cot_steps.append(f"assigned SLA: {sla_days} days (Deadline: {sla_deadline_str})")
     
-    # Update State
-    new_metadata = state.get("projectMetadata", {}).copy()
+    reasoning_text = "\n".join(cot_steps)
+    s3_uri = upload_reasoning_to_s3(submission_id, "Risk & Triage", reasoning_text)
+
+    # State Update
+    new_metadata = project_metadata.copy()
     new_metadata["riskLevel"] = risk_level
     
     new_governance = state.get("governance", {}).copy()
     new_governance["slaDeadline"] = sla_deadline_str
-    # If High Risk, we might want to flag specific A2UI components in a real app,
-    # but the A2UI Component Map says it reacts to 'riskLevel', so state update is sufficient.
 
-    # Audit Log
-    audit_entry: AuditLogEntry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+    # Audit
+    timestamp = datetime.now(timezone.utc).isoformat()
+    raw_entry = {
+        "timestamp": timestamp,
         "agent": "Risk & Triage",
         "action": f"Risk set to {risk_level}",
-        "reason": f"SLA set to {sla_days} days based on content analysis"
+        "reason": f"SLA set to {sla_days} days based on path {path}",
+        "reasoningContext": s3_uri,
+        "userIdentity": get_current_user_identity()
     }
+    signature = generate_audit_signature(raw_entry)
+    audit_entry: AuditLogEntry = {**raw_entry, "signature": signature}
     
     new_audit_log = state.get("auditLog", []).copy()
     new_audit_log.append(audit_entry)
-    
+
     return {
         "projectMetadata": new_metadata,
         "governance": new_governance,

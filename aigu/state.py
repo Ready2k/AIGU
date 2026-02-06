@@ -16,11 +16,14 @@ class Governance(TypedDict, total=False):
     slaDeadline: Optional[str]
     blockers: List[str]
 
-class AuditLogEntry(TypedDict):
+class AuditLogEntry(TypedDict, total=False): # Changed to total=False to allow optional fields seamlessly, though usually all present
     timestamp: str
     agent: str
     action: str
     reason: str
+    reasoningContext: Optional[str] # S3 URI for CoT
+    signature: Optional[str] # SHA-256 Hash
+    userIdentity: Optional[str] # HITL IAM ARN
 
 class SystemConfig(TypedDict, total=False):
     linkDomainWhitelist: List[str]
@@ -36,4 +39,4 @@ class GlobalState(TypedDict, total=False):
     governance: Governance
     auditLog: List[AuditLogEntry]
     ui_overlay: Dict[str, Any]
-    systemConfig: SystemConfig # Added field
+    systemConfig: SystemConfig

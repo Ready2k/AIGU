@@ -1,0 +1,1 @@
+Create a hidden or "Debug" screen where you can paste the temporary credentials obtained from your AWS Landing Zone portal. These should be stored in AsyncStorage (React Native's local storage) and never synced to a backend.

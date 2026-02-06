@@ -1,0 +1,7 @@
+This template creates the "Nerves" connecting the Face to the Brain.
+
+API Gateway (REST): Endpoints for /intake, /state/{id}, and /admin/config.
+
+Amazon SES Configuration: Verification of the "From" email address for the Gatekeeper's offline approval signals.
+
+CORS Configuration: Restricted to your mobile/web app domain to protect the governance data.

@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AIGU Persistence Layer (Memory) - DynamoDB and S3 Artifacts
+
+Resources:
+  # 1. Global State Table (The Brain's Memory)
+  AIGUGlobalStateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AIGU_Global_State
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: submissionId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: submissionId
+          KeyType: HASH
+        - AttributeName: userId
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  # 2. System Config Table (Admin/Tribe Controls)
+  AIGUSystemConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AIGU_System_Config
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: configType
+          AttributeType: S
+        - AttributeName: configId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: configType
+          KeyType: HASH
+        - AttributeName: configId
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+
+  # 3. Artifact Storage (Raw Documents)
+  AIGUArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'aigu-artifacts-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+Outputs:
+  GlobalStateTableName:
+    Value: !Ref AIGUGlobalStateTable
+    Export:
+      Name: AIGU-GlobalStateTableName
+  SystemConfigTableName:
+    Value: !Ref AIGUSystemConfigTable
+    Export:
+      Name: AIGU-SystemConfigTableName
+  ArtifactBucketName:
+    Value: !Ref AIGUArtifactBucket
+    Export:
+      Name: AIGU-ArtifactBucketName
+  GlobalStateTableStreamArn:
+    Value: !GetAtt AIGUGlobalStateTable.StreamArn
+    Export:
+      Name: AIGU-GlobalStateTableStreamArn

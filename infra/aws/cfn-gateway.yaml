@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AIGU Gateway Layer (Nerves) - API Gateway and SES
+
+Resources:
+  # 1. API Gateway (REST API)
+  AIGUApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: AIGU-Governance-API
+      Description: API for AIGU Frontend to talk to the LangGraph Brain
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # 2. Resources & Methods (Proxy to Lambda)
+  # Path: /invoke (POST) - Trigger Agents
+  InvokeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ParentId: !GetAtt AIGUApiGateway.RootResourceId
+      PathPart: invoke
+
+  InvokeMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref InvokeResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  # Path: /state (GET) - Fetch State
+  StateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ParentId: !GetAtt AIGUApiGateway.RootResourceId
+      PathPart: state
+
+  StateMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref StateResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  # 3. Permissions (Gateway -> Lambda)
+  ApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !ImportValue AIGU-LangGraphFunctionArn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AIGUApiGateway}/*/*/*'
+
+  # 4. Deployment
+  AIGUApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: [InvokeMethod, StateMethod]
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+
+  AIGUApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: v1
+      RestApiId: !Ref AIGUApiGateway
+      DeploymentId: !Ref AIGUApiDeployment
+
+Outputs:
+  ApiEndpoint:
+    Value: !Sub 'https://${AIGUApiGateway}.execute-api.${AWS::Region}.amazonaws.com/v1'
+    Export:
+      Name: AIGU-ApiEndpoint

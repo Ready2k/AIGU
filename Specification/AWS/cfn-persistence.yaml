@@ -1,0 +1,7 @@
+This template creates the "Memory" of the system.
+
+AIGU_Global_State: DynamoDB table with submissionId (PK) and userId (SK). Include a StreamSpecification (NEW_AND_OLD_IMAGES) to trigger the Support Agent's live updates.
+
+AIGU_System_Config: DynamoDB table for Tribe Owners to store "Gold Standards" and whitelists.
+
+S3 Artifact Bucket: Versioned bucket with serverless encryption for storing PDFs, DOCX, and PPTX uploads.

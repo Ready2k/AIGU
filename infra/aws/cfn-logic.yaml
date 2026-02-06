@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AIGU Logic Layer (Brain) - LangGraph Lambda and Bedrock Access
+
+Resources:
+  # 1. IAM Role for LangGraph Execution
+  LangGraphExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AIGU-PersistenceAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !Sub 
+                    - 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}'
+                    - TableName: !ImportValue AIGU-GlobalStateTableName
+                  - !Sub 
+                    - 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}'
+                    - TableName: !ImportValue AIGU-SystemConfigTableName
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: 
+                  - !Sub 
+                    - 'arn:aws:s3:::${BucketName}/*'
+                    - BucketName: !ImportValue AIGU-ArtifactBucketName
+        - PolicyName: AIGU-BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource:
+                  - arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0
+                  - arn:aws:bedrock:*::foundation-model/amazon.nova-lite-v1:0
+        - PolicyName: AIGU-CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*:*:*'
+
+  # 2. Lambda Function (The Brain Container)
+  LangGraphEngineFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: AIGU-LangGraph-Engine
+      Runtime: python3.12
+      Handler: aigu.handler.lambda_handler
+      Role: !GetAtt LangGraphExecutionRole.Arn
+      MemorySize: 1024
+      Timeout: 30
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !ImportValue AIGU-GlobalStateTableName
+          CONFIG_TABLE_NAME: !ImportValue AIGU-SystemConfigTableName
+          ARTIFACT_BUCKET: !ImportValue AIGU-ArtifactBucketName
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "Placeholder for CI/CD deployment"}
+
+Outputs:
+  LangGraphFunctionArn:
+    Value: !GetAtt LangGraphEngineFunction.Arn
+    Export:
+      Name: AIGU-LangGraphFunctionArn

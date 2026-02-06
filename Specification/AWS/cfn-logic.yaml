@@ -1,0 +1,7 @@
+This template deploys the "Brain" nodes.
+
+LangGraph Execution Lambda: A high-memory Python 3.12 function containing the orchestrated graph nodes.
+
+Amazon Bedrock Access: IAM roles specifically granting bedrock:InvokeModel for Amazon Nova Pro and Nova Lite.
+
+Environment Variables: Mapping for DYNAMODB_TABLE_NAME, CONFIG_TABLE_NAME, and SLA_THRESHOLD.
