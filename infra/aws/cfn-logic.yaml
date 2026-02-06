@@ -68,6 +68,15 @@ Resources:
                 Resource:
                   - arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0
                   - arn:aws:bedrock:*::foundation-model/amazon.nova-lite-v1:0
+        - PolicyName: AIGU-SESAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
         - PolicyName: AIGU-CloudWatchLogs
           PolicyDocument:
             Version: '2012-10-17'
@@ -96,6 +105,7 @@ Resources:
           ARTIFACT_BUCKET: !ImportValue AIGU-ArtifactBucketName
           CHECKPOINTS_TABLE_NAME: !ImportValue AIGU-CheckpointsTableName
           WRITES_TABLE_NAME: !ImportValue AIGU-WritesTableName
+          NOTIFY_EMAIL_SENDER: "governance@aigu.io"
           LANGFUSE_SECRET_KEY: !Ref LangFuseSecretKey
           LANGFUSE_PUBLIC_KEY: !Ref LangFusePublicKey
           LANGFUSE_HOST: !Ref LangFuseHost

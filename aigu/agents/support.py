@@ -1,10 +1,23 @@
 from typing import Dict, Any, List
 from aigu.state import GlobalState, AuditLogEntry
+from aigu.llm import invoke_nova
 import boto3
 import os
 
-# Initialize S3 (Outside handler for reuse)
+# Initialize S3
 s3_client = boto3.client('s3')
+
+SUPPORT_SYSTEM_PROMPT = """
+You are the AIGU Support & Insights Agent. Your role is to provide Radical Transparency to project owners.
+You must synthesize the current global state (status, stage, risk, blockers, SLA) into a helpful, empathetic, and clear status update.
+
+- If the project is 'Blocked', be specific about why and who is blocking its progress based on the blockers list.
+- If 'In-Review', explain that the project is awaiting horizontal approvals and mention the SLA deadline if available.
+- If 'Approved', be celebratory and mention the current stage and readiness.
+- If 'Draft', welcome the user and explain what is needed for the current stage.
+
+Your output should be a concise paragraph of 2-4 sentences, suitable for a professional dashboard.
+"""
 
 def generate_presigned_url(s3_uri: str, expiration=3600) -> str:
     """
@@ -33,40 +46,39 @@ def generate_presigned_url(s3_uri: str, expiration=3600) -> str:
 
 def support_agent(state: GlobalState) -> Dict[str, Any]:
     """
-    Support & Insights Agent Node.
+    Support & Insights Agent Node powered by Amazon Nova.
     Provides transparent feedback and secure access to audit reasoning.
-    Ref: agents/support.md
     """
     # Read-Only Access
     project_metadata = state.get("projectMetadata", {})
     governance = state.get("governance", {})
     audit_log = state.get("auditLog", [])
     
-    # 1. Gather Context
+    # 1. Invoke Amazon Nova for Personalized Status Synthesis
+    print(f"Support: Invoking Amazon Nova for status summary.")
+    
+    # Construct context for Nova
     status = governance.get("status", "Unknown")
     stage = project_metadata.get("currentStage", "Intake")
-    risk = project_metadata.get("riskLevel", "Low")
-    deadline = governance.get("slaDeadline", "TBD")
-    blockers = governance.get("blockers", [])
+    # 2. Invoke Amazon Nova for Personalized Status Synthesis
+    context_str = f"""
+    Current Status: {status}
+    Current Stage: {stage}
+    Risk Level: {project_metadata.get('riskLevel', 'Low')}
+    SLA Deadline: {governance.get('slaDeadline', 'TBD')}
+    Blockers: {governance.get('blockers', [])}
+    Path: {project_metadata.get('path', 'Standard')}
+    """
     
-    # 2. Construct The Message
-    message = ""
-    if status == "Blocked":
-        message = f"Your project is currently BLOCKED by {len(blockers)} team(s)."
-        if blockers:
-            message += f" Reason(s): {'; '.join(blockers)}."
-        message += " Please resolve these challenges to proceed."
-    elif status == "In-Review":
-         message = f"Your project is under review (Stage: {stage})."
-         message += f" We are waiting for offline approvals."
-         if deadline != "TBD":
-             message += f" Expected completion by {deadline}."
-    elif status == "Approved":
-        message = f"Congratulations! Your {risk}-Risk project is Approved for {stage}."
-    elif status == "Draft":
-        message = f"Welcome back. You are currently in the {stage} phase."
-    else:
-        message = "How can I help you today?"
+    try:
+        message = invoke_nova(
+            system_prompt=SUPPORT_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": f"State Summary:\n{context_str}"}]
+        ).strip()
+    except Exception as e:
+        print(f"Nova invocation failed for support: {e}")
+        message = f"Your project is currently {status} in the {stage} phase."
+
 
     # 3. Secure Reasoning Access (Hydrate Audit Log for Viewer)
     # We iterate the log and generate presigned URLs for any reasoningContext
@@ -89,8 +101,8 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
     return {
         "ui_overlay": {
             "supportMessage": message,
-            "showBlockerAlert": len(blockers) > 0,
-            "slaDisplay": deadline,
+            "showBlockerAlert": len(governance.get("blockers", [])) > 0,
+            "slaDisplay": governance.get("slaDeadline", "TBD"),
             "reasoningUrls": presigned_urls # Map: s3_uri -> https://presigned-url...
         }
     }

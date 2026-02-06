@@ -2,77 +2,71 @@ from datetime import datetime, timezone
 from typing import Dict, Any
 from aigu.state import GlobalState, AuditLogEntry
 from aigu.utils import upload_reasoning_to_s3, generate_audit_signature, get_current_user_identity
+from aigu.llm import query_nova_json
+
+INTAKE_SYSTEM_PROMPT = """
+You are the AIGU Intake Orchestrator. Your role is to analyze project descriptions and categorize them into one of three paths:
+
+1. 'Accelerator': For projects involving Generative AI, Large Language Models (LLMs), AI Agents, or high-impact technical innovations.
+2. 'Standard': For business-as-usual projects, standard software updates, or low-risk tactical implementations.
+3. 'Stop': For projects that involve prohibited shadow IT services (e.g., personal cloud storage like Dropbox, personal Google Drive accounts, or unverified external document sites) or projects that clearly violate corporate security policies.
+
+Analyze the description provided by the user and return your decision in JSON format.
+You must be decisive. If the project mentions GenAI or LLMs, it MUST be 'Accelerator'.
+If the project mentions unapproved external domains for source code or data, it MUST be 'Stop'.
+
+JSON Structure Required:
+- path: String ('Accelerator', 'Standard', 'Stop')
+- reason: String (Concise explanation)
+- action: String (Short summary of the action)
+- remediation: String (Optional, only if path is 'Stop')
+- thoughtProcess: String (Detailed reasoning steps)
+"""
 
 def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     """
-    Intake Orchestrator Node.
+    Intake Orchestrator Node powered by Amazon Nova.
     """
     intake_data = state.get("artifacts", {}).get("intakeData", {})
-    description = intake_data.get("description", "").lower()
+    description = intake_data.get("description", "")
     project_name = intake_data.get("projectName", "Unknown Project")
     submission_id = state.get("submissionId", "unknown-submission")
 
     existing_metadata = state.get("projectMetadata", {})
     existing_stage = existing_metadata.get("currentStage", "Intake")
     
-    # Shadow IT Detection (Domain Specificity)
-    unapproved_domains = ["dropbox.com", "dropbox", "googledrive.com", "unverified-docs-site.io", "github.com/personal"]
-    detected_domains = [d for d in unapproved_domains if d in description]
-    
-    # CoT Simulation
-    cot_steps = [
-        f"Analyzing description: '{description[:50]}...'",
-        "Checking for unapproved external domains (Shadow IT)...",
-    ]
-
-    path = "Standard"
-    action = "Path set to Standard (Default)"
-    reason = "Default standard governance path"
-    # Multi-Stage Support: If project is already past Intake, pass through
+    # 1. Multi-Stage Support: If project is already past Intake, pass through
     if existing_stage != "Intake" and existing_metadata.get("path") in ["Accelerator", "Standard"]:
-        cot_steps.append(f"Project already in {existing_stage} stage. Passing through.")
         return {
             "projectMetadata": existing_metadata,
             "auditLog": state.get("auditLog", []),
             "governance": state.get("governance", {})
         }
 
-    remediation = None
-    if detected_domains:
-        path = "Stop"
-        action = "Project Blocked (Security)"
-        reason = f"Blocked due to unapproved external domains: {', '.join(detected_domains)}."
-        cot_steps.append(f"CRITICAL: {reason}")
-        remediation = "Please migrate code to the official GitLab and use approved documentation sources to proceed."
-        cot_steps.append(f"Remediation suggested: {remediation}")
-    elif "hero capability" in description or "genai" in description or "llm" in description:
-        path = "Accelerator"
-        action = "Path set to Accelerator"
-        reason = "GenAI/Hero Capability detected"
-        cot_steps.append("Match found: GenAI/Hero keywords present.")
-        cot_steps.append("Decision: Route to Accelerator Path.")
-    elif "standard" in description or "bau" in description:
-        path = "Standard"
-        action = "Path set to Standard"
-        reason = "Standard project request"
-        cot_steps.append("Match found: Standard/BAU keywords.")
-        cot_steps.append("Decision: Route to Standard Path.")
-    else:
-        cot_steps.append("No prohibited domains detected. No specific GenAI keywords found.")
-        cot_steps.append("Decision: Soft pivot to Standard Path.")
+    # 2. Invoke Amazon Nova for Intelligent Analysis
+    print(f"Intake: Invoking Amazon Nova for project: {project_name}")
+    analysis = query_nova_json(
+        system_prompt=INTAKE_SYSTEM_PROMPT,
+        user_prompt=f"Project Description: {description}",
+        expected_keys=["path", "reason", "action", "thoughtProcess"]
+    )
 
-    reasoning_text = "\n".join(cot_steps)
-    s3_uri = upload_reasoning_to_s3(submission_id, "Intake Orchestrator", reasoning_text)
+    path = analysis.get("path", "Standard")
+    reason = analysis.get("reason", "Analyzed via Amazon Nova")
+    action = analysis.get("action", "Path Categorization Complete")
+    remediation = analysis.get("remediation")
+    thought_process = analysis.get("thoughtProcess", "Step-by-step analysis carried out.")
 
-    # Update State
+    # 3. Persistence & Audit
+    s3_uri = upload_reasoning_to_s3(submission_id, "Intake Orchestrator", thought_process)
+
+    # Update Metadata
     new_metadata = existing_metadata.copy()
     new_metadata["path"] = path
     
     if path == "Accelerator":
-        # Accelerator projects go to Design/POC first
         new_metadata["currentStage"] = "POC"
     elif path == "Standard":
-        # Standard projects go to Risk Triage
         new_metadata["currentStage"] = "Risk"
     else:
         new_metadata["currentStage"] = "Intake"
@@ -92,14 +86,12 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     }
     signature = generate_audit_signature(raw_entry)
     
-    audit_entry: AuditLogEntry = {
-        **raw_entry,
-        "signature": signature
-    }
+    audit_entry: AuditLogEntry = {**raw_entry, "signature": signature}
     
     new_audit_log = state.get("auditLog", []).copy()
     new_audit_log.append(audit_entry)
     
+    # Governance Status
     new_governance = state.get("governance", {}).copy()
     if path == "Stop":
         new_governance["status"] = "Blocked"
@@ -107,7 +99,6 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
         if remediation:
             new_governance["remediation"] = remediation
     elif not new_governance.get("status") or new_governance.get("status") == "New":
-        # Successfully passed intake, move to Draft
         new_governance["status"] = "Draft"
 
     return {
