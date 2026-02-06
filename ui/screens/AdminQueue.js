@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, Modal } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
 
@@ -7,6 +7,9 @@ const AdminQueue = ({ actions }) => {
     const { theme } = useAiguTheme();
     const [queue, setQueue] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [selectedReasoning, setSelectedReasoning] = useState(null);
+    const [reasoningContent, setReasoningContent] = useState('');
+    const [loadingReasoning, setLoadingReasoning] = useState(false);
 
     const refreshQueue = async () => {
         setLoading(true);
@@ -42,6 +45,51 @@ const AdminQueue = ({ actions }) => {
         }
     };
 
+    const handleStageClick = async (stageName, reasoningUrls) => {
+        console.log("Stage clicked:", stageName, "URLs:", reasoningUrls);
+
+        if (!reasoningUrls || Object.keys(reasoningUrls).length === 0) {
+            Alert.alert("No Reasoning Available", "This stage has not been processed yet.");
+            return;
+        }
+
+        // Map stage names to reasoning file patterns
+        const stageMapping = {
+            'Intake': 'intake',
+            'Risk': 'risk',
+            'GIGC': 'gatekeeper',
+            'Pilot': 'support',
+            'Production': 'outcome',
+            'Handover': 'outcome'
+        };
+
+        const searchPattern = stageMapping[stageName] || stageName.toLowerCase();
+
+        // Find the reasoning URL for this stage
+        const reasoningUrl = Object.entries(reasoningUrls).find(([key]) =>
+            key.toLowerCase().includes(searchPattern)
+        );
+
+        if (!reasoningUrl) {
+            Alert.alert("No Reasoning Available", `No reasoning found for ${stageName} stage.`);
+            return;
+        }
+
+        setSelectedReasoning(stageName);
+        setLoadingReasoning(true);
+
+        try {
+            const response = await fetch(reasoningUrl[1]);
+            const text = await response.text();
+            setReasoningContent(text);
+        } catch (error) {
+            console.error("Failed to fetch reasoning:", error);
+            setReasoningContent("Failed to load reasoning content.");
+        } finally {
+            setLoadingReasoning(false);
+        }
+    };
+
     if (loading) {
         return (
             <View style={styles.center}>
@@ -72,6 +120,7 @@ const AdminQueue = ({ actions }) => {
                             const path = item.projectMetadata?.path || "Pending";
                             const status = item.governance?.status || "Draft";
                             const agentMessage = item.ui_overlay?.supportMessage || "";
+                            const reasoningUrls = item.ui_overlay?.reasoningUrls || {};
 
                             return (
                                 <View
@@ -130,10 +179,18 @@ const AdminQueue = ({ actions }) => {
                                         )}
 
                                         <View style={{ marginTop: 16 }}>
-                                            <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '700', marginBottom: 12 }}>
+                                            <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '700', marginBottom: 8 }}>
                                                 📊 WORKFLOW PROGRESS
                                             </Text>
-                                            <Timeline currentStage={currentStage} theme={theme} />
+                                            <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontSize: 10, marginBottom: 12, fontStyle: 'italic' }}>
+                                                💡 Click on any stage to view LLM reasoning
+                                            </Text>
+                                            <Timeline
+                                                currentStage={currentStage}
+                                                theme={theme}
+                                                reasoningUrls={reasoningUrls}
+                                                onStageClick={handleStageClick}
+                                            />
                                         </View>
 
                                         {item.governance?.blockers?.length > 0 && (
@@ -165,12 +222,43 @@ const AdminQueue = ({ actions }) => {
                         })}
                     </ScrollView>
                 )}
+
+                {/* Reasoning Modal */}
+                <Modal
+                    visible={selectedReasoning !== null}
+                    animationType="slide"
+                    transparent={true}
+                    onRequestClose={() => setSelectedReasoning(null)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+                            <View style={styles.modalHeader}>
+                                <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, fontSize: 18 }}>
+                                    🧠 {selectedReasoning} Stage - LLM Reasoning
+                                </Text>
+                                <TouchableOpacity onPress={() => setSelectedReasoning(null)}>
+                                    <Text style={{ color: theme.colors.error, fontSize: 24, fontWeight: '700' }}>×</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <ScrollView style={styles.modalBody}>
+                                {loadingReasoning ? (
+                                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                                ) : (
+                                    <Text style={{ ...theme.typography.caption, color: theme.colors.textPrimary, lineHeight: 20, fontFamily: 'monospace' }}>
+                                        {reasoningContent}
+                                    </Text>
+                                )}
+                            </ScrollView>
+                        </View>
+                    </View>
+                </Modal>
             </View>
         </ResponsiveWrapper>
     );
 };
 
-const Timeline = ({ currentStage, theme }) => {
+const Timeline = ({ currentStage, theme, reasoningUrls, onStageClick }) => {
     const stages = [
         { name: 'Intake', key: 'Intake' },
         { name: 'Risk', key: 'Risk' },
@@ -187,10 +275,12 @@ const Timeline = ({ currentStage, theme }) => {
         currentIndex = stages.findIndex(s => s.name.toLowerCase() === currentStage.toLowerCase());
     }
 
-    // If stage not found, default to first stage (Intake)
+    // If still not found, default to first stage (Intake)
     if (currentIndex === -1) {
         console.log(`Timeline: Stage "${currentStage}" not found, defaulting to Intake`);
         currentIndex = 0;
+    } else {
+        console.log(`Timeline: Current stage is "${currentStage}" (${stages[currentIndex].name}) at index ${currentIndex}`);
     }
 
     return (
@@ -201,7 +291,10 @@ const Timeline = ({ currentStage, theme }) => {
 
                 return (
                     <React.Fragment key={stage.key}>
-                        <View style={{ alignItems: 'center', minWidth: 50 }}>
+                        <TouchableOpacity
+                            style={{ alignItems: 'center', minWidth: 50 }}
+                            onPress={() => onStageClick(stage.name, reasoningUrls)}
+                        >
                             <View style={{
                                 width: 36,
                                 height: 36,
@@ -238,7 +331,7 @@ const Timeline = ({ currentStage, theme }) => {
                             }}>
                                 {stage.name}
                             </Text>
-                        </View>
+                        </TouchableOpacity>
                         {index < stages.length - 1 && (
                             <View style={{
                                 flex: 1,
@@ -342,6 +435,36 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontWeight: '700',
         fontSize: 12
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20
+    },
+    modalContent: {
+        width: '90%',
+        maxHeight: '80%',
+        borderRadius: 12,
+        padding: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#ddd'
+    },
+    modalBody: {
+        flex: 1
     }
 });
 
