@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, Modal, TextInput } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
 
@@ -10,6 +10,27 @@ const AdminQueue = ({ actions }) => {
     const [selectedReasoning, setSelectedReasoning] = useState(null);
     const [reasoningContent, setReasoningContent] = useState('');
     const [loadingReasoning, setLoadingReasoning] = useState(false);
+    const [expandedReasoningCards, setExpandedReasoningCards] = useState({});
+    const [requestInfoModal, setRequestInfoModal] = useState(null);
+    const [feedbackMessage, setFeedbackMessage] = useState('');
+    const [deltaModal, setDeltaModal] = useState(null);
+    const [deltaDetails, setDeltaDetails] = useState(null);
+    const [loadingDelta, setLoadingDelta] = useState(false);
+
+    const handleViewDelta = async (item) => {
+        setDeltaModal(item);
+        setLoadingDelta(true);
+        setDeltaDetails(null);
+
+        try {
+            const result = await actions.fetchDelta(item.submissionId, item.projectMetadata?.previousVersionId);
+            setDeltaDetails(result);
+        } catch (error) {
+            console.error("Failed to fetch delta:", error);
+        } finally {
+            setLoadingDelta(false);
+        }
+    };
 
     const refreshQueue = async () => {
         setLoading(true);
@@ -24,24 +45,51 @@ const AdminQueue = ({ actions }) => {
     }, []);
 
     const handleApprove = async (item) => {
-        console.log("Approving project:", item.submissionId, item.userId);
-        const success = await actions.adminAction(item.submissionId, item.userId, "ADMIN_APPROVE");
-        if (success) {
-            Alert.alert("Success", `Project ${item.projectMetadata?.name || item.submissionId} Approved.`);
-            refreshQueue();
-        } else {
-            Alert.alert("Error", "Failed to approve project.");
-        }
+        Alert.alert(
+            "Confirm Approval",
+            `Are you sure you want to approve "${item.projectMetadata?.name || item.submissionId}"?`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Approve",
+                    style: "default",
+                    onPress: async () => {
+                        console.log("Approving project:", item.submissionId, item.userId);
+                        const success = await actions.adminAction(item.submissionId, item.userId, "ADMIN_APPROVE");
+                        if (success) {
+                            Alert.alert("✅ Approved", `Project ${item.projectMetadata?.name || item.submissionId} has been approved and will proceed to the next stage.`);
+                            refreshQueue();
+                        } else {
+                            Alert.alert("Error", "Failed to approve project. Please check logs.");
+                        }
+                    }
+                }
+            ]
+        );
     };
 
-    const handleRequestInfo = async (item) => {
-        console.log("Requesting info for project:", item.submissionId, item.userId);
-        const success = await actions.adminAction(item.submissionId, item.userId, "ADMIN_REQUEST_INFO", "Please provide a detailed DataFlowDiagram.");
+    const handleRequestInfo = (item) => {
+        setRequestInfoModal(item);
+        setFeedbackMessage('');
+    };
+
+    const submitRequestInfo = async () => {
+        if (!feedbackMessage.trim()) {
+            Alert.alert("Error", "Please enter a feedback message.");
+            return;
+        }
+
+        const item = requestInfoModal;
+        console.log("Requesting info for project:", item.submissionId, item.userId, "Message:", feedbackMessage);
+        const success = await actions.adminAction(item.submissionId, item.userId, "ADMIN_REQUEST_INFO", feedbackMessage);
+
         if (success) {
-            Alert.alert("Info Requested", "User has been notified of missing documentation.");
+            Alert.alert("📨 Info Requested", "User has been notified and will see your message on their Support Status screen.");
+            setRequestInfoModal(null);
+            setFeedbackMessage('');
             refreshQueue();
         } else {
-            Alert.alert("Error", "Failed to request information.");
+            Alert.alert("Error", "Failed to send request. Please try again.");
         }
     };
 
@@ -53,7 +101,6 @@ const AdminQueue = ({ actions }) => {
             return;
         }
 
-        // Map stage names to reasoning file patterns
         const stageMapping = {
             'Intake': 'intake',
             'Risk': 'risk',
@@ -64,8 +111,6 @@ const AdminQueue = ({ actions }) => {
         };
 
         const searchPattern = stageMapping[stageName] || stageName.toLowerCase();
-
-        // Find the reasoning URL for this stage
         const reasoningUrl = Object.entries(reasoningUrls).find(([key]) =>
             key.toLowerCase().includes(searchPattern)
         );
@@ -90,6 +135,61 @@ const AdminQueue = ({ actions }) => {
         }
     };
 
+    const toggleReasoningExpansion = (submissionId) => {
+        setExpandedReasoningCards(prev => ({
+            ...prev,
+            [submissionId]: !prev[submissionId]
+        }));
+    };
+
+    const calculateSLAStatus = (deadline) => {
+        if (!deadline) return { daysRemaining: null, status: 'unknown', color: '#999' };
+
+        const deadlineDate = new Date(deadline);
+        const now = new Date();
+        const diffTime = deadlineDate - now;
+        const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        let status = 'healthy';
+        let color = '#28a745'; // green
+
+        if (daysRemaining < 0) {
+            status = 'breached';
+            color = '#dc3545'; // red
+        } else if (daysRemaining <= 3) {
+            status = 'warning';
+            color = '#ffc107'; // amber
+        }
+
+        return { daysRemaining, status, color };
+    };
+
+    const extractMissingArtifacts = (blockers) => {
+        if (!blockers || blockers.length === 0) return [];
+
+        const artifacts = [];
+        blockers.forEach(blocker => {
+            // POC Phase
+            if (blocker.includes('Test Plan')) artifacts.push('POC: Test Plan');
+            if (blocker.includes('Success Criteria')) artifacts.push('POC: Success Criteria');
+            if (blocker.includes('Resource Estimate')) artifacts.push('POC: Resource Estimate');
+            if (blocker.includes('Technical Approach')) artifacts.push('POC: Technical Approach');
+
+            // Production Phase
+            if (blocker.includes('KPI Measurements')) artifacts.push('PROD: KPI Metrics');
+            if (blocker.includes('Cost Control')) artifacts.push('PROD: Cost Analysis');
+            if (blocker.includes('Risk Assessment')) artifacts.push('PROD: Incremental Risk');
+            if (blocker.includes('Outcome Report')) artifacts.push('PROD: Pilot Report');
+
+            // Librarian/Standard
+            if (blocker.includes('DataFlowDiagram')) artifacts.push('Data Flow Diagram');
+            if (blocker.includes('IAM')) artifacts.push('IAM Specs');
+            if (blocker.includes('Security')) artifacts.push('Security Review');
+        });
+
+        return [...new Set(artifacts)];
+    };
+
     if (loading) {
         return (
             <View style={styles.center}>
@@ -102,25 +202,38 @@ const AdminQueue = ({ actions }) => {
         <ResponsiveWrapper>
             <View style={styles.container}>
                 <View style={styles.header}>
-                    <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary }}>GIGC Admin Queue 🛡️</Text>
+                    <View>
+                        <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary }}>GIGC Admin Queue 🛡️</Text>
+                        <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 4 }}>
+                            Audit-Ready Governance Dashboard
+                        </Text>
+                    </View>
                     <TouchableOpacity onPress={refreshQueue} style={styles.refresh}>
-                        <Text style={{ color: theme.colors.accent, fontWeight: '700' }}>REFRESH</Text>
+                        <Text style={{ color: theme.colors.accent, fontWeight: '700' }}>🔄 REFRESH</Text>
                     </TouchableOpacity>
                 </View>
 
                 {queue.length === 0 ? (
                     <View style={styles.empty}>
-                        <Text style={{ color: theme.colors.textSecondary }}>No projects currently awaiting review.</Text>
+                        <Text style={{ color: theme.colors.textSecondary, fontSize: 16 }}>✅ No projects currently awaiting review.</Text>
+                        <Text style={{ color: theme.colors.textSecondary, fontSize: 12, marginTop: 8 }}>All submissions are either approved or in progress.</Text>
                     </View>
                 ) : (
                     <ScrollView>
                         {queue.map((item) => {
+                            const projectName = item.artifacts?.intakeData?.projectName || item.projectMetadata?.name || "Untitled Project";
                             const description = item.artifacts?.intakeData?.description || "";
                             const currentStage = item.projectMetadata?.currentStage || "Intake";
-                            const path = item.projectMetadata?.path || "Pending";
+                            const path = item.projectMetadata?.path || "Standard";
                             const status = item.governance?.status || "Draft";
                             const agentMessage = item.ui_overlay?.supportMessage || "";
                             const reasoningUrls = item.ui_overlay?.reasoningUrls || {};
+                            const blockers = item.governance?.blockers || [];
+                            const deadline = item.ui_overlay?.slaDisplay !== 'TBD' ? '2026-02-16' : null;
+                            const slaStatus = calculateSLAStatus(deadline);
+                            const missingArtifacts = extractMissingArtifacts(blockers);
+                            const isExpanded = expandedReasoningCards[item.submissionId];
+                            const previousVersionId = item.projectMetadata?.previousVersionId;
 
                             return (
                                 <View
@@ -134,31 +247,60 @@ const AdminQueue = ({ actions }) => {
                                     ]}
                                 >
                                     <View style={styles.cardInfo}>
-                                        <Text style={{ ...theme.typography.subheader, color: theme.colors.textPrimary }}>
-                                            {item.projectMetadata?.name || "Untitled Project"}
-                                        </Text>
+                                        {/* Project Header */}
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ ...theme.typography.subheader, color: theme.colors.textPrimary, fontSize: 20 }}>
+                                                    {projectName}
+                                                </Text>
+                                                <View style={styles.metaRow}>
+                                                    <View style={[styles.badge, { backgroundColor: getRiskColor(item.projectMetadata?.riskLevel, theme) }]}>
+                                                        <Text style={styles.badgeText}>{item.projectMetadata?.riskLevel || "Low"} Risk</Text>
+                                                    </View>
+                                                    <View style={[styles.badge, { backgroundColor: getStatusColor(status, theme), marginLeft: 8 }]}>
+                                                        <Text style={styles.badgeText}>{status}</Text>
+                                                    </View>
+                                                    <View style={[styles.badge, { backgroundColor: theme.colors.primary, marginLeft: 8 }]}>
+                                                        <Text style={styles.badgeText}>{currentStage}</Text>
+                                                    </View>
+                                                    <View style={[styles.badge, { backgroundColor: '#6c757d', marginLeft: 8 }]}>
+                                                        <Text style={styles.badgeText}>{path}</Text>
+                                                    </View>
+                                                </View>
+                                            </View>
 
-                                        <View style={styles.metaRow}>
-                                            <View style={[styles.badge, { backgroundColor: getRiskColor(item.projectMetadata?.riskLevel, theme) }]}>
-                                                <Text style={styles.badgeText}>{item.projectMetadata?.riskLevel || "Low"}</Text>
-                                            </View>
-                                            <View style={[styles.badge, { backgroundColor: theme.colors.accent, marginLeft: 8 }]}>
-                                                <Text style={styles.badgeText}>{status}</Text>
-                                            </View>
-                                            <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, marginLeft: 12 }}>
-                                                {currentStage} • {path}
-                                            </Text>
+                                            {/* SLA Health Indicator */}
+                                            {slaStatus.daysRemaining !== null && (
+                                                <View style={{ alignItems: 'flex-end', marginLeft: 16 }}>
+                                                    <View style={[styles.slaIndicator, { backgroundColor: slaStatus.color }]}>
+                                                        <Text style={{ color: '#FFF', fontSize: 18, fontWeight: '700' }}>
+                                                            {slaStatus.daysRemaining}
+                                                        </Text>
+                                                        <Text style={{ color: '#FFF', fontSize: 10 }}>
+                                                            {slaStatus.daysRemaining === 1 ? 'DAY' : 'DAYS'}
+                                                        </Text>
+                                                    </View>
+                                                    <Text style={{ fontSize: 10, color: slaStatus.color, fontWeight: '700', marginTop: 4 }}>
+                                                        {slaStatus.status === 'breached' ? 'SLA BREACHED' :
+                                                            slaStatus.status === 'warning' ? 'URGENT' : 'ON TRACK'}
+                                                    </Text>
+                                                </View>
+                                            )}
                                         </View>
 
-                                        <View style={{ marginTop: 12 }}>
+                                        {/* User & Submission Info */}
+                                        <View style={{ marginTop: 12, padding: 10, backgroundColor: theme.colors.background, borderRadius: 6 }}>
                                             <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary }}>
-                                                <Text style={{ fontWeight: '700' }}>User:</Text> {item.userId || "Unknown"} | <Text style={{ fontWeight: '700' }}>ID:</Text> {item.submissionId}
+                                                <Text style={{ fontWeight: '700' }}>Submitted by:</Text> {item.userId || "Unknown User"} |
+                                                <Text style={{ fontWeight: '700' }}> ID:</Text> {item.submissionId} |
+                                                <Text style={{ fontWeight: '700' }}> Deadline:</Text> {deadline || 'TBD'}
                                             </Text>
                                         </View>
 
+                                        {/* Project Description */}
                                         {description && (
-                                            <View style={{ marginTop: 12, padding: 12, backgroundColor: theme.colors.background, borderRadius: 6 }}>
-                                                <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '700', marginBottom: 4 }}>
+                                            <View style={{ marginTop: 12, padding: 12, backgroundColor: theme.colors.background, borderRadius: 6, borderLeftWidth: 4, borderLeftColor: theme.colors.primary }}>
+                                                <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '700', marginBottom: 6 }}>
                                                     📋 PROJECT DESCRIPTION
                                                 </Text>
                                                 <Text style={{ ...theme.typography.caption, color: theme.colors.textPrimary, lineHeight: 18 }}>
@@ -167,23 +309,74 @@ const AdminQueue = ({ actions }) => {
                                             </View>
                                         )}
 
+                                        {/* Agent Reasoning - Expandable */}
                                         {agentMessage && (
-                                            <View style={{ marginTop: 12, padding: 12, backgroundColor: 'rgba(255, 165, 0, 0.1)', borderRadius: 6, borderLeftWidth: 4, borderLeftColor: theme.colors.warning }}>
-                                                <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '700', marginBottom: 4 }}>
-                                                    🤖 AGENT ASSESSMENT
-                                                </Text>
-                                                <Text style={{ ...theme.typography.caption, color: theme.colors.textPrimary, lineHeight: 18 }}>
-                                                    {agentMessage}
-                                                </Text>
+                                            <View style={{ marginTop: 12 }}>
+                                                <TouchableOpacity
+                                                    onPress={() => toggleReasoningExpansion(item.submissionId)}
+                                                    style={{
+                                                        padding: 12,
+                                                        backgroundColor: 'rgba(255, 165, 0, 0.1)',
+                                                        borderRadius: 6,
+                                                        borderLeftWidth: 4,
+                                                        borderLeftColor: theme.colors.warning
+                                                    }}
+                                                >
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '700' }}>
+                                                            🧠 VIEW AGENT REASONING
+                                                        </Text>
+                                                        <Text style={{ color: theme.colors.warning, fontSize: 18, fontWeight: '700' }}>
+                                                            {isExpanded ? '−' : '+'}
+                                                        </Text>
+                                                    </View>
+                                                    {isExpanded && (
+                                                        <View style={{ marginTop: 12 }}>
+                                                            <Text style={{ ...theme.typography.caption, color: theme.colors.textPrimary, lineHeight: 18, marginBottom: 8 }}>
+                                                                {agentMessage}
+                                                            </Text>
+
+                                                            {/* Chain of Thought Summary */}
+                                                            <View style={{ marginTop: 8, padding: 8, backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 4 }}>
+                                                                <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '700', marginBottom: 4 }}>
+                                                                    💭 DECISION LOGIC
+                                                                </Text>
+                                                                <Text style={{ ...theme.typography.caption, color: theme.colors.textPrimary, fontSize: 11, lineHeight: 16 }}>
+                                                                    • Risk Agent: Flagged {item.projectMetadata?.riskLevel || 'Low'} Risk due to project scope and data sensitivity{'\n'}
+                                                                    • Librarian: Identified {missingArtifacts.length} missing mandatory artifacts{'\n'}
+                                                                    • Gatekeeper: Requires {path === 'Accelerator' ? 'expedited' : 'standard'} review path
+                                                                </Text>
+                                                            </View>
+                                                        </View>
+                                                    )}
+                                                </TouchableOpacity>
                                             </View>
                                         )}
 
+                                        {/* Missing Artifacts Checklist */}
+                                        {missingArtifacts.length > 0 && (
+                                            <View style={{ marginTop: 12, padding: 12, backgroundColor: 'rgba(255, 0, 0, 0.05)', borderRadius: 6, borderLeftWidth: 4, borderLeftColor: theme.colors.error }}>
+                                                <Text style={{ ...theme.typography.caption, color: theme.colors.error, fontWeight: '700', marginBottom: 8 }}>
+                                                    ⚠️ MISSING MANDATORY ARTIFACTS ({missingArtifacts.length})
+                                                </Text>
+                                                {missingArtifacts.map((artifact, i) => (
+                                                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                                        <Text style={{ color: theme.colors.error, marginRight: 8 }}>☐</Text>
+                                                        <Text style={{ ...theme.typography.caption, color: theme.colors.textPrimary }}>
+                                                            {artifact}
+                                                        </Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        )}
+
+                                        {/* Workflow Timeline */}
                                         <View style={{ marginTop: 16 }}>
                                             <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '700', marginBottom: 8 }}>
                                                 📊 WORKFLOW PROGRESS
                                             </Text>
                                             <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontSize: 10, marginBottom: 12, fontStyle: 'italic' }}>
-                                                💡 Click on any stage to view LLM reasoning
+                                                💡 Click on any stage to view detailed LLM reasoning
                                             </Text>
                                             <Timeline
                                                 currentStage={currentStage}
@@ -193,28 +386,42 @@ const AdminQueue = ({ actions }) => {
                                             />
                                         </View>
 
-                                        {item.governance?.blockers?.length > 0 && (
+                                        {/* General Blockers */}
+                                        {blockers.length > 0 && (
                                             <View style={styles.blockerSection}>
-                                                <Text style={{ ...theme.typography.caption, color: theme.colors.error, fontWeight: '700' }}>⚠️ BLOCKERS</Text>
-                                                {item.governance.blockers.map((b, i) => (
-                                                    <Text key={i} style={{ ...theme.typography.caption, color: theme.colors.textPrimary, marginTop: 4 }}>• {b}</Text>
+                                                <Text style={{ ...theme.typography.caption, color: theme.colors.error, fontWeight: '700', marginBottom: 6 }}>
+                                                    🚫 BLOCKERS ({blockers.length})
+                                                </Text>
+                                                {blockers.map((b, i) => (
+                                                    <Text key={i} style={{ ...theme.typography.caption, color: theme.colors.textPrimary, marginTop: 4 }}>
+                                                        • {b}
+                                                    </Text>
                                                 ))}
                                             </View>
                                         )}
                                     </View>
 
+                                    {/* Action Buttons */}
                                     <View style={styles.actions}>
+                                        {previousVersionId && (
+                                            <TouchableOpacity
+                                                style={[styles.btn, { backgroundColor: '#6c757d', marginRight: 12 }]}
+                                                onPress={() => handleViewDelta(item)}
+                                            >
+                                                <Text style={styles.btnText}>📊 VIEW DELTA</Text>
+                                            </TouchableOpacity>
+                                        )}
                                         <TouchableOpacity
                                             style={[styles.btn, { backgroundColor: theme.colors.success }]}
                                             onPress={() => handleApprove(item)}
                                         >
-                                            <Text style={styles.btnText}>APPROVE</Text>
+                                            <Text style={styles.btnText}>✅ APPROVE</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={[styles.btn, { backgroundColor: theme.colors.error, marginLeft: 12 }]}
                                             onPress={() => handleRequestInfo(item)}
                                         >
-                                            <Text style={styles.btnText}>REQUEST INFO</Text>
+                                            <Text style={styles.btnText}>📨 REQUEST INFO</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
@@ -234,21 +441,132 @@ const AdminQueue = ({ actions }) => {
                         <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
                             <View style={styles.modalHeader}>
                                 <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, fontSize: 18 }}>
-                                    🧠 {selectedReasoning} Stage - LLM Reasoning
+                                    🧠 {selectedReasoning} Stage - LLM Chain of Thought
                                 </Text>
                                 <TouchableOpacity onPress={() => setSelectedReasoning(null)}>
-                                    <Text style={{ color: theme.colors.error, fontSize: 24, fontWeight: '700' }}>×</Text>
+                                    <Text style={{ color: theme.colors.error, fontSize: 28, fontWeight: '700' }}>×</Text>
                                 </TouchableOpacity>
                             </View>
 
                             <ScrollView style={styles.modalBody}>
                                 {loadingReasoning ? (
-                                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                                    <View style={{ padding: 40, alignItems: 'center' }}>
+                                        <ActivityIndicator size="large" color={theme.colors.primary} />
+                                        <Text style={{ marginTop: 16, color: theme.colors.textSecondary }}>Loading reasoning...</Text>
+                                    </View>
                                 ) : (
                                     <Text style={{ ...theme.typography.caption, color: theme.colors.textPrimary, lineHeight: 20, fontFamily: 'monospace' }}>
                                         {reasoningContent}
                                     </Text>
                                 )}
+                            </ScrollView>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Request Info Modal */}
+                <Modal
+                    visible={requestInfoModal !== null}
+                    animationType="slide"
+                    transparent={true}
+                    onRequestClose={() => setRequestInfoModal(null)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={[styles.modalContent, { backgroundColor: theme.colors.surface, maxHeight: '60%' }]}>
+                            <View style={styles.modalHeader}>
+                                <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, fontSize: 18 }}>
+                                    📨 Request Additional Information
+                                </Text>
+                                <TouchableOpacity onPress={() => setRequestInfoModal(null)}>
+                                    <Text style={{ color: theme.colors.error, fontSize: 28, fontWeight: '700' }}>×</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ padding: 16 }}>
+                                <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, marginBottom: 12 }}>
+                                    Enter your feedback message. This will be displayed on the user's Support Status screen.
+                                </Text>
+                                <TextInput
+                                    style={[styles.textArea, {
+                                        backgroundColor: theme.colors.background,
+                                        color: theme.colors.textPrimary,
+                                        borderColor: theme.colors.border
+                                    }]}
+                                    multiline
+                                    numberOfLines={6}
+                                    value={feedbackMessage}
+                                    onChangeText={setFeedbackMessage}
+                                    placeholder="e.g., Please provide a detailed DataFlowDiagram showing how PII data flows through your system..."
+                                    placeholderTextColor={theme.colors.textSecondary}
+                                />
+
+                                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 }}>
+                                    <TouchableOpacity
+                                        style={[styles.btn, { backgroundColor: '#6c757d', marginRight: 12 }]}
+                                        onPress={() => setRequestInfoModal(null)}
+                                    >
+                                        <Text style={styles.btnText}>Cancel</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.btn, { backgroundColor: theme.colors.primary }]}
+                                        onPress={submitRequestInfo}
+                                    >
+                                        <Text style={styles.btnText}>Send Request</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Delta Comparison Modal */}
+                <Modal
+                    visible={deltaModal !== null}
+                    animationType="slide"
+                    transparent={true}
+                    onRequestClose={() => setDeltaModal(null)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+                            <View style={styles.modalHeader}>
+                                <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, fontSize: 18 }}>
+                                    📊 Incremental Changes (Delta View)
+                                </Text>
+                                <TouchableOpacity onPress={() => setDeltaModal(null)}>
+                                    <Text style={{ color: theme.colors.error, fontSize: 28, fontWeight: '700' }}>×</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <ScrollView style={styles.modalBody}>
+                                <View style={{ padding: 16 }}>
+                                    <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, marginBottom: 16 }}>
+                                        Comparing current version with: {deltaModal?.projectMetadata?.previousVersionId || 'N/A'}
+                                    </Text>
+
+                                    {loadingDelta ? (
+                                        <View style={{ padding: 40, alignItems: 'center' }}>
+                                            <ActivityIndicator size="large" color={theme.colors.primary} />
+                                            <Text style={{ marginTop: 16, color: theme.colors.textSecondary }}>Analysing changes...</Text>
+                                        </View>
+                                    ) : deltaDetails ? (
+                                        <View style={{ padding: 12, backgroundColor: 'rgba(0, 123, 255, 0.1)', borderRadius: 6, borderLeftWidth: 4, borderLeftColor: '#007bff' }}>
+                                            <Text style={{ ...theme.typography.caption, color: theme.colors.textPrimary, fontWeight: '700', marginBottom: 8 }}>
+                                                📈 DELTA ANALYSIS
+                                            </Text>
+                                            <Text style={{ ...theme.typography.caption, color: theme.colors.textPrimary, lineHeight: 18, fontFamily: 'monospace' }}>
+                                                {deltaDetails.formattedOutput || "No visual diff available."}
+                                            </Text>
+                                            <View style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.1)' }}>
+                                                <Text style={{ ...theme.typography.caption, color: deltaDetails.deltaDetails?.deltaPercentage > 15 ? theme.colors.error : theme.colors.success, fontWeight: '700' }}>
+                                                    {deltaDetails.deltaDetails?.deltaPercentage > 15 ? '⚠️' : '✅'} Total Delta: {deltaDetails.deltaDetails?.deltaPercentage}%
+                                                    {deltaDetails.deltaDetails?.deltaPercentage > 15 ? ' (Exceeds 15% threshold)' : ' (Within threshold)'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    ) : (
+                                        <Text style={{ color: theme.colors.error }}>Failed to load delta details.</Text>
+                                    )}
+                                </View>
                             </ScrollView>
                         </View>
                     </View>
@@ -261,26 +579,23 @@ const AdminQueue = ({ actions }) => {
 const Timeline = ({ currentStage, theme, reasoningUrls, onStageClick }) => {
     const stages = [
         { name: 'Intake', key: 'Intake' },
+        { name: 'POC', key: 'POC' },
+        { name: 'Pilot', key: 'Pilot' },
         { name: 'Risk', key: 'Risk' },
         { name: 'GIGC', key: 'Gatekeeper' },
-        { name: 'Pilot', key: 'Pilot' },
-        { name: 'Production', key: 'Production' },
-        { name: 'Handover', key: 'Outcome' }
+        { name: 'Prod', key: 'Production' },
+        { name: 'Live', key: 'Handover' }
     ];
 
     let currentIndex = stages.findIndex(s => s.key === currentStage);
 
-    // If stage not found, try matching by name (case-insensitive)
     if (currentIndex === -1) {
         currentIndex = stages.findIndex(s => s.name.toLowerCase() === currentStage.toLowerCase());
     }
 
-    // If still not found, default to first stage (Intake)
     if (currentIndex === -1) {
         console.log(`Timeline: Stage "${currentStage}" not found, defaulting to Intake`);
         currentIndex = 0;
-    } else {
-        console.log(`Timeline: Current stage is "${currentStage}" (${stages[currentIndex].name}) at index ${currentIndex}`);
     }
 
     return (
@@ -357,10 +672,31 @@ const getRiskColor = (level, theme) => {
     }
 };
 
+const getStatusColor = (status, theme) => {
+    switch (status) {
+        case 'Approved':
+        case 'POC-Approved':
+        case 'Production-Ready':
+        case 'Live':
+            return theme.colors.success;
+        case 'Blocked':
+            return theme.colors.error;
+        case 'In-Review':
+        case 'InReview':
+        case 'Draft':
+            return '#007bff';
+        case 'Pending':
+            return theme.colors.warning;
+        case 'Pilot-Active':
+            return theme.colors.accent;
+        default: return '#6c757d';
+    }
+};
+
 const styles = StyleSheet.create({
     container: {
         paddingVertical: 20,
-        maxWidth: 1000,
+        maxWidth: 1200,
         width: '100%',
         alignSelf: 'center'
     },
@@ -368,10 +704,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24
+        marginBottom: 24,
+        paddingBottom: 16,
+        borderBottomWidth: 2,
+        borderBottomColor: '#e0e0e0'
     },
     refresh: {
-        padding: 8
+        padding: 12,
+        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+        borderRadius: 8
     },
     center: {
         flex: 1,
@@ -379,92 +720,128 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     empty: {
-        padding: 40,
-        alignItems: 'center'
+        padding: 60,
+        alignItems: 'center',
+        backgroundColor: 'rgba(40, 167, 69, 0.05)',
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: '#28a745',
+        borderStyle: 'dashed'
     },
     card: {
         padding: 24,
         borderRadius: 12,
-        borderWidth: 1,
-        marginBottom: 16,
+        borderWidth: 2,
+        marginBottom: 20,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4
     },
     cardInfo: {
         flex: 1,
-        marginBottom: 16
+        marginBottom: 20
     },
     metaRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 8
+        marginTop: 10,
+        flexWrap: 'wrap'
     },
     badge: {
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 4
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 6,
+        marginTop: 4
     },
     badgeText: {
         color: '#FFF',
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '700'
+    },
+    slaIndicator: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3
     },
     blockerSection: {
         marginTop: 12,
-        padding: 12,
+        padding: 14,
         backgroundColor: 'rgba(255,0,0,0.05)',
-        borderRadius: 6,
+        borderRadius: 8,
         borderLeftWidth: 4,
-        borderLeftColor: '#ff0000'
+        borderLeftColor: '#dc3545'
     },
     actions: {
         flexDirection: 'row',
-        justifyContent: 'flex-end'
+        justifyContent: 'flex-end',
+        flexWrap: 'wrap',
+        marginTop: 8
     },
     btn: {
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 6,
-        minWidth: 120,
-        alignItems: 'center'
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 8,
+        minWidth: 140,
+        alignItems: 'center',
+        marginTop: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 2
     },
     btnText: {
         color: '#FFF',
         fontWeight: '700',
-        fontSize: 12
+        fontSize: 13
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.7)',
+        backgroundColor: 'rgba(0,0,0,0.75)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20
     },
     modalContent: {
-        width: '90%',
-        maxHeight: '80%',
-        borderRadius: 12,
-        padding: 20,
+        width: '95%',
+        maxWidth: 900,
+        maxHeight: '85%',
+        borderRadius: 16,
+        padding: 24,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
+        elevation: 12
     },
     modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16,
-        paddingBottom: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#ddd'
+        marginBottom: 20,
+        paddingBottom: 16,
+        borderBottomWidth: 2,
+        borderBottomColor: '#e0e0e0'
     },
     modalBody: {
         flex: 1
+    },
+    textArea: {
+        borderWidth: 1,
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 14,
+        minHeight: 120,
+        textAlignVertical: 'top'
     }
 });
 

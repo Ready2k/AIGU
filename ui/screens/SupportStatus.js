@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
+import WorkflowProgress from '../components/WorkflowProgress';
 
 const SupportStatus = ({ state, onViewLog, refresh }) => {
     const { theme } = useAiguTheme();
@@ -45,18 +46,8 @@ const SupportStatus = ({ state, onViewLog, refresh }) => {
                         </View>
                     </View>
 
-                    {/* Timeline Simulation */}
-                    <View style={styles.timeline}>
-                        <View style={[styles.timelineNode, { backgroundColor: theme.colors.surface, borderColor: status === 'Approved' ? theme.colors.success : theme.colors.border }]}>
-                            <View style={[styles.dot, { backgroundColor: theme.colors.success }]} />
-                            <Text style={{ ...theme.typography.body, fontWeight: '600', color: theme.colors.textPrimary }}>Intake Complete</Text>
-                        </View>
-                        <View style={[styles.timelineLine, { backgroundColor: theme.colors.border }]} />
-                        <View style={[styles.timelineNode, { backgroundColor: theme.colors.surface, borderColor: statusColor, borderWidth: 2 }]}>
-                            <View style={[styles.dot, { backgroundColor: statusColor }]} />
-                            <Text style={{ ...theme.typography.body, fontWeight: '600', color: theme.colors.textPrimary }}>{status}</Text>
-                        </View>
-                    </View>
+                    {/* Dynamic Workflow Progress */}
+                    <WorkflowProgress state={state} />
 
                     {status === 'Blocked' && (
                         <View style={[styles.alertBox, { backgroundColor: theme.mode === 'dark' ? '#321c1c' : '#FFEBEB', borderLeftColor: theme.colors.error }]}>
@@ -109,10 +100,10 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 12,
-        elevation: 3
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.1,
+        shadowRadius: 15,
+        elevation: 6
     },
     header: {
         flexDirection: 'row',
@@ -123,55 +114,51 @@ const styles = StyleSheet.create({
     statusRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 40
+        marginBottom: 24
     },
     badge: {
         paddingHorizontal: 12,
-        paddingVertical: 4,
+        paddingVertical: 6,
         borderRadius: 4,
-        marginLeft: 8
-    },
-    timeline: {
-        marginBottom: 40
-    },
-    timelineNode: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-        borderRadius: 8,
-        borderWidth: 1,
-    },
-    dot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        marginRight: 12
-    },
-    timelineLine: {
-        width: 2,
-        height: 24,
-        marginLeft: 21,
+        marginLeft: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2
     },
     alertBox: {
         padding: 20,
         borderRadius: 8,
         borderLeftWidth: 4,
-        marginBottom: 32
+        marginTop: 24,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 1
     },
     footer: {
-        marginTop: 8,
+        marginTop: 24,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(0,0,0,0.05)',
-        paddingTop: 32
+        borderTopColor: 'rgba(128,128,128,0.2)',
+        paddingTop: 24
     },
     auditButton: {
         paddingVertical: 14,
         borderRadius: 8,
         borderWidth: 1,
-        alignItems: 'center'
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2
     },
     refreshButton: {
-        padding: 8
+        padding: 8,
+        borderRadius: 6
     }
 });
 

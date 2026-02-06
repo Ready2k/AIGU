@@ -87,19 +87,69 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
             if agent == "intake":
                 graph_input["artifacts"] = {"intakeData": inner_payload}
-            elif agent == "outcome":
+            elif agent == "outcome" or agent == "handover":
                 graph_input["governance"] = {"status": "Approved" if inner_payload.get("scopeAck") else "Blocked"}
             elif agent == "admin_action":
                 action = inner_payload.get("action")
                 print(f"Applying Admin Action: {action} for {submission_id}")
                 if action == "ADMIN_APPROVE":
-                    graph_input["governance"] = {"status": "Approved"}
+                    graph_input["governance"] = {
+                        "status": "Approved",
+                        "adminApproved": True,
+                        "adminAction": "ADMIN_APPROVE"
+                    }
                 elif action == "ADMIN_REQUEST_INFO":
                     msg = inner_payload.get("message", "Missing Information")
                     graph_input["governance"] = {
-                        "status": "Blocked", 
+                        "status": "Blocked",
+                        "adminAction": "ADMIN_REQUEST_INFO",
+                        "adminMessage": msg,
                         "blockers": [f"Admin Request: {msg}"]
                     }
+            elif agent == "production":
+                # Handle production resubmission with delta calculation
+                previous_version_id = inner_payload.get("previousVersionId")
+                if previous_version_id:
+                    print(f"Production resubmission: Calculating delta from {previous_version_id}")
+                    
+                    import boto3
+                    dynamodb = boto3.resource('dynamodb')
+                    state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+                    
+                    try:
+                        # Fetch previous version
+                        prev_response = state_table.get_item(Key={"submissionId": previous_version_id})
+                        if "Item" in prev_response:
+                            from aigu.delta_calculator import get_delta_details
+                            previous_state = prev_response["Item"]
+                            
+                            # Fetch current state (to combine with new data)
+                            curr_response = state_table.get_item(Key={"submissionId": submission_id})
+                            current_state = curr_response.get("Item", {})
+                            
+                            # Temp state for delta calculation
+                            temp_state = json.loads(json.dumps(current_state))
+                            if "artifacts" not in temp_state: temp_state["artifacts"] = {}
+                            # Update with new intake data if present, or existing
+                            # For production, we usually compare the intake data (scope)
+                            # but we can also compare technical design.
+                            
+                            delta_details = get_delta_details(temp_state, previous_state)
+                            delta_pct = delta_details["deltaPercentage"]
+                            print(f"Delta calculated: {delta_pct}%")
+                            
+                            graph_input["projectMetadata"] = {
+                                "previousVersionId": previous_version_id,
+                                "deltaPercentage": delta_pct
+                            }
+                        else:
+                            print(f"Warning: Previous version {previous_version_id} not found")
+                    except Exception as e:
+                        print(f"Error calculating delta in handler: {e}")
+                
+                graph_input["artifacts"] = {
+                    "productionData": inner_payload.get("productionData", {})
+                }
             else:
                 graph_input.update(payload)
 
@@ -164,6 +214,62 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "headers": headers,
                 "body": json.dumps(enriched_queue, default=str)
             }
+
+        # --- PATH: /delta ---
+        elif "/delta" in path:
+            import boto3
+            from aigu.delta_calculator import get_delta_details, format_delta_for_display
+            
+            dynamodb = boto3.resource('dynamodb')
+            state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+            
+            # Get current and previous version IDs
+            current_id = payload.get("currentVersionId") or submission_id
+            previous_id = payload.get("previousVersionId")
+            
+            if not previous_id:
+                return {
+                    "statusCode": 400,
+                    "headers": headers,
+                    "body": json.dumps({"error": "previousVersionId is required"})
+                }
+            
+            try:
+                # Fetch both versions
+                curr_response = state_table.get_item(Key={"submissionId": current_id})
+                prev_response = state_table.get_item(Key={"submissionId": previous_id})
+                
+                if "Item" not in curr_response or "Item" not in prev_response:
+                    return {
+                        "statusCode": 404,
+                        "headers": headers,
+                        "body": json.dumps({"error": "One or both versions not found"})
+                    }
+                
+                current_state = curr_response["Item"]
+                previous_state = prev_response["Item"]
+                
+                # Calculate delta
+                delta_details = get_delta_details(current_state, previous_state)
+                formatted_output = format_delta_for_display(delta_details)
+                
+                print(f"Delta calculation complete: {delta_details['deltaPercentage']}%")
+                
+                return {
+                    "statusCode": 200,
+                    "headers": headers,
+                    "body": json.dumps({
+                        "deltaDetails": delta_details,
+                        "formattedOutput": formatted_output
+                    }, default=str)
+                }
+            except Exception as e:
+                print(f"Error calculating delta endpoint: {e}")
+                return {
+                    "statusCode": 500,
+                    "headers": headers,
+                    "body": json.dumps({"error": str(e)})
+                }
 
         # --- PATH: /state ---
         elif "/state" in path:

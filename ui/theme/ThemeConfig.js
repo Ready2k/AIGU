@@ -64,30 +64,38 @@ export const LightPalette = {
     shadows: SHADOWS
 };
 
-// 2. Dark Mode Palette (AWS Console Dark)
+// 2. Dark Mode Palette (Premium Onyx/Navy)
 export const DarkPalette = {
     mode: 'dark',
     colors: {
-        background: '#16191F', // AWS Deep Black
-        surface: '#232F3E',    // AWS Navy Surface
-        primary: '#FFFFFF',    // White Text on Dark
-        secondary: '#FF9900',  // AWS Accent Orange (Kept consistent)
-        accent: '#879596',     // Muted Blue/Grey
-        success: '#2E8B57',    // Softer Green
-        warning: '#F08C00',    // Softer Orange
-        error: '#EF5350',      // Softer Red
-        textPrimary: '#FFFFFF',
-        textSecondary: '#AAB7B8',
-        textInverted: '#16191F',
-        border: '#545B64'
+        background: '#0F111A', // Deep Midnight
+        surface: '#1B1E2E',    // Slate Navy Surface
+        primary: '#3E7BFA',    // Vibrant Primary Blue
+        secondary: '#F59E0B',  // Vibrant Amber
+        accent: '#8B5CF6',     // Premium Violet
+        success: '#10B981',    // Emerald
+        warning: '#F59E0B',    // Amber
+        error: '#EF4444',      // Rose
+        textPrimary: '#F8FAFC', // Slate 50
+        textSecondary: '#94A3B8', // Slate 400
+        textInverted: '#FFFFFF', // White text on colored backgrounds
+        border: '#2D324D'      // Muted border
     },
     typography: {
         ...TYPOGRAPHY,
-        caption: { ...TYPOGRAPHY.caption, color: '#AAB7B8' }
+        caption: { ...TYPOGRAPHY.caption, color: '#94A3B8' }
     },
     spacing: SPACING,
     borderRadius: BORDER_RADIUS,
-    shadows: SHADOWS // Shadows are less visible in dark mode but kept for structure
+    shadows: {
+        card: {
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 10,
+            elevation: 8,
+        }
+    }
 };
 
 // Legacy Export for backward compatibility during migration

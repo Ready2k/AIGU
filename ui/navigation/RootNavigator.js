@@ -11,6 +11,7 @@ import AdminDashboard from '../screens/AdminDashboard';
 import LogViewer from '../screens/LogViewer';
 import DevConsole from '../screens/DevConsole';
 import AdminQueue from '../screens/AdminQueue';
+import LifecycleSubmission from '../screens/LifecycleSubmission';
 import { TouchableOpacity } from 'react-native';
 
 const RootNavigator = ({ submissionId, userId, isAdmin }) => {
@@ -72,54 +73,35 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
             );
         }
 
-        // 3. Governance Blocking/Engagement Logic (Highest Priority)
-        if (computed.isEngaged) {
+        // 3. Stage-Based Navigation
+        const stage = computed.currentStage;
+        const status = state.governance?.status;
+
+        // Routing Logic
+        if (stage === 'Intake' && status === 'Draft') {
+            return <DiscoveryCanvas actions={actions} />;
+        }
+
+        // Blocking/Action Required Screens
+        if (stage === 'POC' && status === 'Blocked') {
+            return <LifecycleSubmission stage="POC" state={state} actions={actions} />;
+        }
+
+        if (stage === 'Production' && status === 'Blocked') {
+            // Delta threshold block has priority UI
             if (computed.isDeltaBlocked) {
                 return <DeltaReview state={state} onSubmit={actions.submitDelta} />;
             }
-            return <SupportStatus
-                state={state}
-                refresh={actions.refreshState}
-                onViewLog={() => setShowLogs(true)}
-            />;
+            return <LifecycleSubmission stage="Production" state={state} actions={actions} />;
         }
 
-        // 4. Stage-Based Navigation
-        switch (computed.currentStage) {
-            case 'Intake':
-                return <DiscoveryCanvas actions={actions} />;
-
-            case 'Pilot':
-                return (
-                    <View style={{ flex: 1, padding: 20 }}>
-                        <Text style={AIGU_THEME.typography.header}>Pilot Workspace</Text>
-                        <Text style={{ ...AIGU_THEME.typography.caption, color: AIGU_THEME.colors.warning, marginBottom: 20 }}>
-                            Risk Level: {computed.riskLevel}
-                        </Text>
-                        {/* Nested SupportStatus to show the timeline/logs while in Pilot */}
-                        <SupportStatus
-                            state={state}
-                            refresh={actions.refreshState}
-                            onViewLog={() => setShowLogs(true)}
-                        />
-                    </View>
-                );
-
-            case 'Production':
-                return (
-                    <View style={{ flex: 1, padding: 20, justifyContent: 'center', alignItems: 'center' }}>
-                        <Text style={{ ...AIGU_THEME.typography.header, color: AIGU_THEME.colors.success }}>
-                            🚀 Production Live
-                        </Text>
-                        <Text style={{ color: AIGU_THEME.colors.textSecondary, marginTop: 8 }}>
-                            Your project is now governed and active.
-                        </Text>
-                    </View>
-                );
-
-            default:
-                return <DiscoveryCanvas actions={actions} />;
-        }
+        // Default: Show Tracking Screen (SupportStatus)
+        // This covers Pilot, Risk, Librarian, Gatekeeper, and Handover stages
+        return <SupportStatus
+            state={state}
+            refresh={actions.refreshState}
+            onViewLog={() => setShowLogs(true)}
+        />;
     };
 
     return (

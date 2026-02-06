@@ -152,6 +152,17 @@ export const useAiguState = (submissionId, userId) => {
         return result || [];
     };
 
+    const fetchDelta = async (currentId, previousId) => {
+        try {
+            console.log(`Fetching delta: ${currentId} vs ${previousId}`);
+            const result = await signedFetch(`/delta?currentId=${currentId}&previousId=${previousId}`);
+            return result;
+        } catch (err) {
+            console.error("Delta fetch failed", err);
+            return null;
+        }
+    };
+
     const adminAction = async (targetSubmissionId, targetUserId, action, message = "") => {
         try {
             console.log("adminAction called:", { targetSubmissionId, targetUserId, action, message });
@@ -173,13 +184,55 @@ export const useAiguState = (submissionId, userId) => {
         }
     };
 
+    const submitPOC = async (pocData) => {
+        setLoading(true);
+        try {
+            const newState = await signedFetch('/invoke', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ agent: 'poc', submissionId, userId, payload: { pocData } })
+            });
+            setGlobalState(newState);
+        } catch (err) {
+            setError(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const submitProduction = async (productionData, previousVersionId) => {
+        setLoading(true);
+        try {
+            const newState = await signedFetch('/invoke', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    agent: 'production',
+                    submissionId,
+                    userId,
+                    payload: { productionData, previousVersionId }
+                })
+            });
+            setGlobalState(newState);
+        } catch (err) {
+            setError(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const governance = globalState?.governance || {};
     const status = governance.status;
     const blockers = governance.blockers || [];
+    const currentStage = globalState?.projectMetadata?.currentStage || 'Intake';
+
     const isBlocked = status === 'Blocked';
-    const isInReview = status === 'In-Review';
-    const isEngaged = isBlocked || isInReview;
-    const isDeltaBlocked = isBlocked && blockers.some(b => b.includes("Delta Threshold"));
+    const isInReview = status === 'In-Review' || status === 'InReview' || status === 'Pending';
+    const isApproved = status === 'Approved' || status === 'POC-Approved' || status === 'Production-Ready' || status === 'Live';
+
+    // Engaged means the project has started governance (past initial intake)
+    const isEngaged = currentStage !== 'Intake' || status !== 'Draft';
+    const isDeltaBlocked = isBlocked && (blockers.some(b => b.includes("Delta")) || blockers.some(b => b.includes("threshold")));
 
     return {
         state: globalState,
@@ -187,21 +240,26 @@ export const useAiguState = (submissionId, userId) => {
         error,
         actions: {
             initiateIntake,
+            submitPOC,
+            submitProduction,
             submitDelta,
             updateConfig,
             refreshState: fetchState,
-            fetchReasoning, // Exported for LogViewer
+            fetchReasoning,
             fetchAdminQueue,
+            fetchDelta,
             adminAction
         },
         computed: {
             isBlocked,
             isInReview,
+            isApproved,
             isEngaged,
             isDeltaBlocked,
             blockers,
-            currentStage: globalState?.projectMetadata?.currentStage || 'Intake',
-            riskLevel: globalState?.projectMetadata?.riskLevel || 'Low'
+            currentStage,
+            riskLevel: globalState?.projectMetadata?.riskLevel || 'Low',
+            path: globalState?.projectMetadata?.path || 'Standard'
         }
     };
 };

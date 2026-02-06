@@ -21,7 +21,11 @@ function AppContent() {
     if (!isLoggedIn) {
         return (
             <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-                <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                <View style={[styles.card, {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    borderWidth: theme.mode === 'dark' ? 1.5 : 1
+                }]}>
                     <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, textAlign: 'center' }}>
                         AIGU Workspace
                     </Text>
@@ -33,7 +37,7 @@ function AppContent() {
                         <Text style={[styles.label, { color: theme.colors.textSecondary }]}>User Identity</Text>
                         <TextInput
                             style={[styles.input, {
-                                backgroundColor: theme.colors.background,
+                                backgroundColor: theme.mode === 'dark' ? theme.colors.background : '#F9FAFB',
                                 color: theme.colors.textPrimary,
                                 borderColor: theme.colors.border
                             }]}
@@ -46,7 +50,7 @@ function AppContent() {
                         <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Submission ID</Text>
                         <TextInput
                             style={[styles.input, {
-                                backgroundColor: theme.colors.background,
+                                backgroundColor: theme.mode === 'dark' ? theme.colors.background : '#F9FAFB',
                                 color: theme.colors.textPrimary,
                                 borderColor: theme.colors.border
                             }]}
@@ -61,7 +65,7 @@ function AppContent() {
                         style={[styles.button, { backgroundColor: theme.colors.primary }]}
                         onPress={() => setIsLoggedIn(true)}
                     >
-                        <Text style={styles.buttonText}>Enter Workspace</Text>
+                        <Text style={[styles.buttonText, { color: '#FFFFFF' }]}>Enter Workspace</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
