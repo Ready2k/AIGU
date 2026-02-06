@@ -37,6 +37,7 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:BatchWriteItem
                   - dynamodb:DeleteItem
+                  - dynamodb:Scan
                 Resource:
                   - !Sub 
                     - 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}'

@@ -16,6 +16,8 @@ export const useAiguState = (submissionId, userId) => {
         const method = options.method || 'GET';
         let headers = { ...options.headers };
 
+        console.log(`signedFetch: ${method} ${url}`);
+
         if (DEV_MODE) {
             const creds = await getCredentials();
             if (creds) {
@@ -25,16 +27,24 @@ export const useAiguState = (submissionId, userId) => {
         }
 
         const response = await fetch(url, { ...options, headers });
+        console.log(`signedFetch response: ${response.status} ${response.statusText}`);
+
         if (!response.ok) {
             const txt = await response.text();
             throw new Error(`API Error: ${response.status} - ${txt}`);
         }
         // Handle text response (Reasoning CoT) vs JSON (State)
         const contentType = response.headers.get("content-type");
+        console.log(`signedFetch contentType: ${contentType}`);
+
         if (contentType && contentType.includes("application/json")) {
-            return response.json();
+            const json = await response.json();
+            console.log(`signedFetch JSON result:`, json);
+            return json;
         }
-        return response.text();
+        const text = await response.text();
+        console.log(`signedFetch text result:`, text);
+        return text;
     }, []);
 
     // 1. Fetch State
@@ -135,6 +145,34 @@ export const useAiguState = (submissionId, userId) => {
         }
     };
 
+    const fetchAdminQueue = async () => {
+        console.log("Fetching admin queue from /admin/list");
+        const result = await signedFetch('/admin/list');
+        console.log("Admin queue result:", result);
+        return result || [];
+    };
+
+    const adminAction = async (targetSubmissionId, targetUserId, action, message = "") => {
+        try {
+            console.log("adminAction called:", { targetSubmissionId, targetUserId, action, message });
+            const result = await signedFetch('/invoke', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    agent: 'admin_action',
+                    submissionId: targetSubmissionId,
+                    userId: targetUserId,
+                    payload: { action, message }
+                })
+            });
+            console.log("adminAction result:", result);
+            return true;
+        } catch (err) {
+            console.error("Admin action failed", err);
+            return false;
+        }
+    };
+
     const governance = globalState?.governance || {};
     const status = governance.status;
     const blockers = governance.blockers || [];
@@ -152,7 +190,9 @@ export const useAiguState = (submissionId, userId) => {
             submitDelta,
             updateConfig,
             refreshState: fetchState,
-            fetchReasoning // Exported for LogViewer
+            fetchReasoning, // Exported for LogViewer
+            fetchAdminQueue,
+            adminAction
         },
         computed: {
             isBlocked,

@@ -30,6 +30,19 @@ function AppContent() {
                     </Text>
 
                     <View style={styles.inputGroup}>
+                        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>User Identity</Text>
+                        <TextInput
+                            style={[styles.input, {
+                                backgroundColor: theme.colors.background,
+                                color: theme.colors.textPrimary,
+                                borderColor: theme.colors.border
+                            }]}
+                            value={userId}
+                            onChangeText={setUserId}
+                            placeholder="e.g. admin or your name"
+                            placeholderTextColor={theme.colors.textSecondary}
+                        />
+
                         <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Submission ID</Text>
                         <TextInput
                             style={[styles.input, {
@@ -41,17 +54,6 @@ function AppContent() {
                             onChangeText={setSubmissionId}
                             placeholder="e.g. project-x-123"
                             placeholderTextColor={theme.colors.textSecondary}
-                        />
-
-                        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>User Identity</Text>
-                        <TextInput
-                            style={[styles.input, {
-                                backgroundColor: theme.colors.background,
-                                color: theme.colors.textPrimary,
-                                borderColor: theme.colors.border
-                            }]}
-                            value={userId}
-                            onChangeText={setUserId}
                         />
                     </View>
 
@@ -75,7 +77,7 @@ function AppContent() {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
-            <RootNavigator submissionId={submissionId} userId={userId} isAdmin={false} />
+            <RootNavigator submissionId={submissionId} userId={userId} isAdmin={userId.toLowerCase() === 'admin'} />
         </SafeAreaView>
     );
 }

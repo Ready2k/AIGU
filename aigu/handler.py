@@ -89,6 +89,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 graph_input["artifacts"] = {"intakeData": inner_payload}
             elif agent == "outcome":
                 graph_input["governance"] = {"status": "Approved" if inner_payload.get("scopeAck") else "Blocked"}
+            elif agent == "admin_action":
+                action = inner_payload.get("action")
+                print(f"Applying Admin Action: {action} for {submission_id}")
+                if action == "ADMIN_APPROVE":
+                    graph_input["governance"] = {"status": "Approved"}
+                elif action == "ADMIN_REQUEST_INFO":
+                    msg = inner_payload.get("message", "Missing Information")
+                    graph_input["governance"] = {
+                        "status": "Blocked", 
+                        "blockers": [f"Admin Request: {msg}"]
+                    }
             else:
                 graph_input.update(payload)
 
@@ -101,6 +112,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             )
             print(f"Graph result: {json.dumps(result, default=str)}")
             
+            # For admin actions, explicitly update the Global State table
+            if agent == "admin_action":
+                import boto3
+                dynamodb = boto3.resource('dynamodb')
+                state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+                
+                print(f"Updating Global State for {submission_id} with status: {result.get('governance', {}).get('status')}")
+                state_table.put_item(Item=result)
+            
             if hasattr(langfuse_handler, "client"):
                 langfuse_handler.client.flush()
             
@@ -111,6 +131,38 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "statusCode": 200,
                 "headers": headers,
                 "body": json.dumps(enriched_result, default=str)
+            }
+
+        # --- PATH: /admin/list ---
+        elif "/admin/list" in path:
+            import boto3
+            dynamodb = boto3.resource('dynamodb')
+            state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+            
+            # Simple Scan for Demo (Production should use a Global Secondary Index on Status)
+            response = state_table.scan()
+            items = response.get('Items', [])
+            
+            print(f"Admin Queue: Scanned {len(items)} items from DynamoDB")
+            for item in items:
+                status = item.get('governance', {}).get('status', 'Unknown')
+                print(f"  - Project {item.get('submissionId')}: status={status}")
+            
+            # Filter for Reviewable items (Draft, Pending, In-Review, Blocked)
+            review_queue = [
+                item for item in items 
+                if item.get('governance', {}).get('status') in ['Draft', 'Pending', 'In-Review', 'Blocked']
+            ]
+            
+            print(f"Admin Queue: Filtered to {len(review_queue)} reviewable items")
+            
+            # Enrich items with reasoning URLs for admin preview
+            enriched_queue = [enrich_state_with_presigned_urls(item) for item in review_queue]
+            
+            return {
+                "statusCode": 200,
+                "headers": headers,
+                "body": json.dumps(enriched_queue, default=str)
             }
 
         # --- PATH: /state ---

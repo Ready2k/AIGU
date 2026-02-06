@@ -9,17 +9,18 @@ import SupportStatus from '../screens/SupportStatus';
 import DeltaReview from '../screens/DeltaReview';
 import AdminDashboard from '../screens/AdminDashboard';
 import LogViewer from '../screens/LogViewer';
-import DevConsole from '../screens/DevConsole'; // Added DevConsole import
+import DevConsole from '../screens/DevConsole';
+import AdminQueue from '../screens/AdminQueue';
 import { TouchableOpacity } from 'react-native';
 
 const RootNavigator = ({ submissionId, userId, isAdmin }) => {
     // 1. Session Recovery & State Subscription via Hook
     const { state, loading, actions, computed, error } = useAiguState(submissionId, userId);
     const [showLogs, setShowLogs] = React.useState(false);
-    const [showDevConsole, setShowDevConsole] = React.useState(false); // Added showDevConsole state
+    const [showDevConsole, setShowDevConsole] = React.useState(false);
 
     const renderContent = () => {
-        if (showDevConsole) { // Added DevConsole rendering condition
+        if (showDevConsole) {
             return <DevConsole onClose={() => setShowDevConsole(false)} />;
         }
 
@@ -50,7 +51,7 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
 
         // 2. Admin Override
         if (isAdmin) {
-            return <AdminDashboard actions={actions} />;
+            return <AdminQueue actions={actions} />;
         }
 
         // --- View Shared Log View (Priority) ---
