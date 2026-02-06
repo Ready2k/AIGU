@@ -5,7 +5,18 @@ from typing import Dict, Any, List, Optional
 
 # Configuration
 REGION = os.environ.get("AWS_REGION", "us-east-1")
-NOVA_MODEL_ID = os.environ.get("NOVA_MODEL_ID", "amazon.nova-pro-v1:0")
+DEFAULT_MODEL = os.environ.get("NOVA_MODEL_ID", "amazon.nova-pro-v1:0")
+
+# Runtime Override
+_runtime_model_override = None
+
+def set_model_id(model_id: str):
+    global _runtime_model_override
+    print(f"LLM: Setting runtime model override to: {model_id}")
+    _runtime_model_override = model_id
+
+def get_model_id() -> str:
+    return _runtime_model_override or DEFAULT_MODEL
 
 def get_bedrock_client():
     return boto3.client("bedrock-runtime", region_name=REGION)
@@ -31,7 +42,7 @@ def invoke_nova(
 
     try:
         response = client.converse(
-            modelId=NOVA_MODEL_ID,
+            modelId=get_model_id(),
             messages=formatted_messages,
             system=[{"text": system_prompt}],
             inferenceConfig={

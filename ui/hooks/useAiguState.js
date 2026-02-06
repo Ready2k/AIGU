@@ -163,6 +163,24 @@ export const useAiguState = (submissionId, userId) => {
         }
     };
 
+    const fetchModels = async () => {
+        try {
+            return await signedFetch('/models');
+        } catch (err) {
+            console.error("Failed to fetch models", err);
+            return [];
+        }
+    };
+
+    const fetchConfig = async () => {
+        try {
+            return await signedFetch('/config', { method: 'GET' });
+        } catch (err) {
+            console.error("Failed to fetch config", err);
+            return {};
+        }
+    };
+
     const adminAction = async (targetSubmissionId, targetUserId, action, message = "") => {
         try {
             console.log("adminAction called:", { targetSubmissionId, targetUserId, action, message });
@@ -248,6 +266,8 @@ export const useAiguState = (submissionId, userId) => {
             fetchReasoning,
             fetchAdminQueue,
             fetchDelta,
+            fetchModels,
+            fetchConfig,
             adminAction
         },
         computed: {

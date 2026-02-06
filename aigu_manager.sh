@@ -48,7 +48,8 @@ deploy() {
     --parameter-overrides \
         LangFuseSecretKey="$LANGFUSE_SECRET_KEY" \
         LangFusePublicKey="$LANGFUSE_PUBLIC_KEY" \
-        LangFuseHost="$LANGFUSE_BASE_URL"
+        LangFuseHost="$LANGFUSE_BASE_URL" \
+        NovaModelId="$NOVA_MODEL_ID"
   
   aws cloudformation deploy --template-file infra/aws/cfn-gateway.yaml --stack-name ${STACK_BASE}-gateway --region ${REGION}
   

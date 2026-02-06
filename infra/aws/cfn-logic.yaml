@@ -11,6 +11,10 @@ Parameters:
   LangFuseHost:
     Type: String
     Description: LangFuse Host URL (e.g. cloud.langfuse.com)
+  NovaModelId:
+    Type: String
+    Default: "amazon.nova-pro-v1:0"
+    Description: Default Amazon Nova Model ID
 
 Resources:
   # 1. IAM Role for LangGraph Execution
@@ -64,10 +68,14 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: bedrock:InvokeModel
+                Action: 
+                  - bedrock:InvokeModel
                 Resource:
-                  - arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0
-                  - arn:aws:bedrock:*::foundation-model/amazon.nova-lite-v1:0
+                  - arn:aws:bedrock:*::foundation-model/amazon.nova-*
+              - Effect: Allow
+                Action: 
+                  - bedrock:ListFoundationModels
+                Resource: "*"
         - PolicyName: AIGU-SESAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -109,6 +117,7 @@ Resources:
           LANGFUSE_SECRET_KEY: !Ref LangFuseSecretKey
           LANGFUSE_PUBLIC_KEY: !Ref LangFusePublicKey
           LANGFUSE_HOST: !Ref LangFuseHost
+          NOVA_MODEL_ID: !Ref NovaModelId
       Code: ../../build_logic
 
 Outputs:

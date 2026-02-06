@@ -13,6 +13,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     path = event.get("path", "")
     method = event.get("httpMethod", "POST")
     
+    # 0. Load System Config (Bootstrap)
+    load_system_config()
+    
     try:
         # Normalize response headers for CORS
         headers = {
@@ -312,6 +315,59 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "body": json.dumps(enriched_state, default=str)
             }
 
+        # --- PATH: /config ---
+        elif "/config" in path:
+            import boto3
+            dynamodb = boto3.resource('dynamodb')
+            config_table = dynamodb.Table(os.environ.get("CONFIG_TABLE_NAME", "AIGU_System_Config"))
+            
+            if method == "POST":
+                # Save config (e.g. modelId)
+                config_item = {
+                    "configType": "SYSTEM",
+                    "configId": "CORE",
+                    "data": payload
+                }
+                config_table.put_item(Item=config_item)
+                # Re-bootstrap for current execution
+                load_system_config()
+                return {
+                    "statusCode": 200,
+                    "headers": headers,
+                    "body": json.dumps({"status": "Configuration Updated", "activeModel": payload.get("novaModelId")})
+                }
+            else:
+                # GET config
+                response = config_table.get_item(Key={"configType": "SYSTEM", "configId": "CORE"})
+                config_data = response.get("Item", {}).get("data", {})
+                return {
+                    "statusCode": 200,
+                    "headers": headers,
+                    "body": json.dumps(config_data)
+                }
+
+        # --- PATH: /models ---
+        elif "/models" in path:
+            import boto3
+            client = boto3.client("bedrock", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+            response = client.list_foundation_models(byOutputModality='TEXT')
+            
+            # Filter for Amazon Nova models
+            nova_models = [
+                {
+                    "modelId": m["modelId"],
+                    "modelName": m["modelName"]
+                }
+                for m in response.get("modelSummaries", [])
+                if "nova" in m["modelId"]
+            ]
+            
+            return {
+                "statusCode": 200,
+                "headers": headers,
+                "body": json.dumps(nova_models)
+            }
+
         # --- UNKNOWN PATH ---
         return {
             "statusCode": 404,
@@ -361,3 +417,24 @@ def enrich_state_with_presigned_urls(state: Dict[str, Any]) -> Dict[str, Any]:
         "reasoningUrls": reasoning_urls
     }
     return state
+
+def load_system_config():
+    """
+    Bootstraps the execution with system-wide configuration from DynamoDB.
+    """
+    try:
+        import boto3
+        from aigu.llm import set_model_id
+        
+        config_table_name = os.environ.get("CONFIG_TABLE_NAME", "AIGU_System_Config")
+        dynamodb = boto3.resource('dynamodb')
+        table = dynamodb.Table(config_table_name)
+        
+        response = table.get_item(Key={"configType": "SYSTEM", "configId": "CORE"})
+        if "Item" in response:
+            config_data = response["Item"].get("data", {})
+            model_id = config_data.get("novaModelId")
+            if model_id:
+                set_model_id(model_id)
+    except Exception as e:
+        print(f"Failed to load system config: {e}")

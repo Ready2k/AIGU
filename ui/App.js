@@ -4,6 +4,7 @@ import RootNavigator from './navigation/RootNavigator';
 import DevConsole from './screens/DevConsole';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useAiguTheme } from './theme/ThemeContext';
+import { useAiguState } from './hooks/useAiguState';
 
 function AppContent() {
     const { theme } = useAiguTheme();
@@ -14,8 +15,11 @@ function AppContent() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [showDevConsole, setShowDevConsole] = useState(false);
 
+    // Global Actions for Config/Models discovery even before login
+    const { actions } = useAiguState(submissionId, userId);
+
     if (showDevConsole) {
-        return <DevConsole onClose={() => setShowDevConsole(false)} />;
+        return <DevConsole actions={actions} onClose={() => setShowDevConsole(false)} />;
     }
 
     if (!isLoggedIn) {

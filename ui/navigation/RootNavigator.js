@@ -19,10 +19,11 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
     const { state, loading, actions, computed, error } = useAiguState(submissionId, userId);
     const [showLogs, setShowLogs] = React.useState(false);
     const [showDevConsole, setShowDevConsole] = React.useState(false);
+    const [isRemediating, setIsRemediating] = React.useState(false);
 
     const renderContent = () => {
         if (showDevConsole) {
-            return <DevConsole onClose={() => setShowDevConsole(false)} />;
+            return <DevConsole actions={actions} onClose={() => setShowDevConsole(false)} />;
         }
 
         if (!state && loading) {
@@ -78,8 +79,17 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
         const status = state.governance?.status;
 
         // Routing Logic
-        if (stage === 'Intake' && (status === 'Draft' || status === 'New' || !status)) {
-            return <DiscoveryCanvas actions={actions} />;
+        if (stage === 'Intake') {
+            if (status === 'Draft' || status === 'New' || !status || isRemediating) {
+                return (
+                    <DiscoveryCanvas
+                        actions={actions}
+                        isRemediation={isRemediating}
+                        initialData={state.artifacts?.intakeData || {}}
+                        setRemediating={setIsRemediating}
+                    />
+                );
+            }
         }
 
         // Blocking/Action Required Screens
@@ -101,6 +111,7 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
             state={state}
             refresh={actions.refreshState}
             onViewLog={() => setShowLogs(true)}
+            onRemediate={() => setIsRemediating(true)}
         />;
     };
 

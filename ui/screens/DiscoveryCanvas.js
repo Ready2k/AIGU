@@ -3,19 +3,21 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-nativ
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
 
-const DiscoveryCanvas = ({ actions }) => {
+const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, setRemediating }) => {
     const { theme } = useAiguTheme();
-    const [description, setDescription] = useState('');
+    const [description, setDescription] = useState(initialData.description || '');
 
     return (
         <ResponsiveWrapper>
             <View style={styles.formContainer}>
-                <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, marginBottom: theme.spacing.md }}>
-                    Discovery Canvas
+                <Text style={{ ...theme.typography.header, color: isRemediation ? theme.colors.error : theme.colors.textPrimary, marginBottom: theme.spacing.md }}>
+                    {isRemediation ? '🛠️ Project Remediation' : 'Discovery Canvas'}
                 </Text>
 
                 <Text style={{ ...theme.typography.body, color: theme.colors.textSecondary, marginBottom: theme.spacing.lg }}>
-                    Describe your project idea below. AIGU will analyze keywords to determine the governance path and risk level.
+                    {isRemediation
+                        ? 'Please update your project description to align with corporate safety policies. Remove any references to unverified external services.'
+                        : 'Describe your project idea below. AIGU will analyze keywords to determine the governance path and risk level.'}
                 </Text>
 
                 <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
@@ -40,9 +42,12 @@ const DiscoveryCanvas = ({ actions }) => {
 
                     <TouchableOpacity
                         style={[styles.button, { backgroundColor: theme.colors.accent }]}
-                        onPress={() => actions.initiateIntake({ description })}
+                        onPress={() => {
+                            actions.initiateIntake({ description });
+                            if (setRemediating) setRemediating(false);
+                        }}
                     >
-                        <Text style={styles.buttonText}>Submit to AIGU</Text>
+                        <Text style={styles.buttonText}>{isRemediation ? 'RE-SUBMIT FOR REVIEW' : 'Submit to AIGU'}</Text>
                     </TouchableOpacity>
                 </View>
             </View>

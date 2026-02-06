@@ -4,7 +4,7 @@ import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
 import WorkflowProgress from '../components/WorkflowProgress';
 
-const SupportStatus = ({ state, onViewLog, refresh }) => {
+const SupportStatus = ({ state, onViewLog, refresh, onRemediate }) => {
     const { theme } = useAiguTheme();
 
     // Read-Only Status & Transparency
@@ -68,6 +68,15 @@ const SupportStatus = ({ state, onViewLog, refresh }) => {
                                     <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, fontStyle: 'italic' }}>
                                         {governance.remediation}
                                     </Text>
+
+                                    {state.projectMetadata?.currentStage === 'Intake' && onRemediate && (
+                                        <TouchableOpacity
+                                            style={[styles.remediateButton, { backgroundColor: theme.colors.primary }]}
+                                            onPress={onRemediate}
+                                        >
+                                            <Text style={{ color: '#FFF', fontWeight: '700' }}>REMEDIATE & RE-SUBMIT</Text>
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                             )}
                         </View>
@@ -170,6 +179,18 @@ const styles = StyleSheet.create({
     refreshButton: {
         padding: 8,
         borderRadius: 6
+    },
+    remediateButton: {
+        marginTop: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2
     }
 });
 
