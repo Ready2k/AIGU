@@ -8,10 +8,13 @@ import DiscoveryCanvas from '../screens/DiscoveryCanvas';
 import SupportStatus from '../screens/SupportStatus';
 import DeltaReview from '../screens/DeltaReview';
 import AdminDashboard from '../screens/AdminDashboard';
+import LogViewer from '../screens/LogViewer';
+import { TouchableOpacity } from 'react-native';
 
 const RootNavigator = ({ submissionId, userId, isAdmin }) => {
     // 1. Session Recovery & State Subscription via Hook
     const { state, loading, actions, computed, error } = useAiguState(submissionId, userId);
+    const [showLogs, setShowLogs] = React.useState(false);
 
     const renderContent = () => {
         if (!state && loading) {
@@ -38,12 +41,34 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
             return <AdminDashboard actions={actions} />;
         }
 
+        // --- View Shared Log View (Priority) ---
+        if (showLogs) {
+            return (
+                <View style={{ flex: 1 }}>
+                    <TouchableOpacity
+                        style={{ padding: 20, paddingTop: 40 }}
+                        onPress={() => setShowLogs(false)}
+                    >
+                        <Text style={{ color: AIGU_THEME.colors.accent, fontWeight: '700' }}>← BACK TO DASHBOARD</Text>
+                    </TouchableOpacity>
+                    <LogViewer
+                        auditLog={state.auditLog}
+                        fetchReasoning={actions.fetchReasoning}
+                    />
+                </View>
+            );
+        }
+
         // 3. Governance Blocking/Engagement Logic (Highest Priority)
         if (computed.isEngaged) {
             if (computed.isDeltaBlocked) {
                 return <DeltaReview state={state} onSubmit={actions.submitDelta} />;
             }
-            return <SupportStatus state={state} refresh={actions.refreshState} />;
+            return <SupportStatus
+                state={state}
+                refresh={actions.refreshState}
+                onViewLog={() => setShowLogs(true)}
+            />;
         }
 
         // 4. Stage-Based Navigation
@@ -59,7 +84,11 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
                             Risk Level: {computed.riskLevel}
                         </Text>
                         {/* Nested SupportStatus to show the timeline/logs while in Pilot */}
-                        <SupportStatus state={state} refresh={actions.refreshState} />
+                        <SupportStatus
+                            state={state}
+                            refresh={actions.refreshState}
+                            onViewLog={() => setShowLogs(true)}
+                        />
                     </View>
                 );
 

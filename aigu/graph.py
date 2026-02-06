@@ -44,11 +44,15 @@ def build_aigu_graph():
     workflow.add_edge("outcome", END)
     workflow.add_edge("support", END)
     
-    # Persistence
+    # Persistence Setup
     checkpoints_table = os.environ.get("CHECKPOINTS_TABLE_NAME")
     writes_table = os.environ.get("WRITES_TABLE_NAME")
+    project_id = os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State")
 
     if checkpoints_table and writes_table:
+        print(f"Initializing LangGraph persistence with tables: {checkpoints_table}, {writes_table}")
+        print(f"Primary Application State Table identified as: {project_id}")
+        
         # The DynamoDBSaver in langgraph-checkpoint-dynamodb 0.1.0 
         # requires both table names as strings.
         checkpointer = DynamoDBSaver(

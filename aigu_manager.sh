@@ -59,9 +59,9 @@ deploy() {
 
 # --- Function: Smoke Test the "Brain" ---
 test_brain() {
-  # Load .env variables if present
+  # Load .env variables if present (ignoring comments)
   if [ -f .env ]; then
-    export $(cat .env | xargs)
+    export $(grep -v '^#' .env | xargs)
   fi
 
   API_URL=$(aws cloudformation describe-stacks --stack-name ${STACK_BASE}-gateway --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' --output text --region ${REGION})

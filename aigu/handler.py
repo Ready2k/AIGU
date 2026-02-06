@@ -58,9 +58,32 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # 4.1 Normalize Payload for LangGraph State
             # The frontend sends: { agent, submissionId, userId, payload }
             # LangGraph expects GlobalState structure.
+            # We map submissionId to LangFuse Session and userId to LangFuse User via metadata.
+            metadata = {
+                "langfuse_session_id": submission_id,
+                "langfuse_user_id": user_id
+            }
             agent = payload.get("agent")
             inner_payload = payload.get("payload", {})
-            
+
+            # --- Explicit Initialization Block ---
+            # persists the intakeData to AIGU_Global_State before invoking the graph
+            if agent == "intake":
+                import boto3
+                dynamodb = boto3.resource('dynamodb')
+                state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+                
+                project_id = submission_id
+                print(f"Attempting to persist state for project: {project_id}")
+                state_table.put_item(Item={
+                    "submissionId": submission_id,
+                    "userId": user_id,
+                    "artifacts": {"intakeData": inner_payload},
+                    "projectMetadata": {"currentStage": "Intake", "path": "Pending"},
+                    "governance": {"status": "Draft"},
+                    "auditLog": []
+                })
+
             graph_input = {
                 "submissionId": submission_id,
                 "userId": user_id
@@ -81,9 +104,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # Direct invocation fallback (for CLI tests)
                 graph_input.update(payload)
 
-            # Pass trace callbacks
+            # Pass trace callbacks and metadata
             print(f"Invoking graph with input: {json.dumps(graph_input, default=str)}")
-            result = app.invoke(graph_input, config={**config, "callbacks": [langfuse_handler]})
+            # LangGraph handles persistence via the DynamoDBSaver checkpointer configured in graph.py
+            result = app.invoke(
+                graph_input, 
+                config={**config, "callbacks": [langfuse_handler], "metadata": metadata}
+            )
             print(f"Graph result: {json.dumps(result, default=str)}")
             
             if hasattr(langfuse_handler, "client"):

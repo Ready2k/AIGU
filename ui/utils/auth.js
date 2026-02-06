@@ -23,8 +23,8 @@ export const saveCredentials = async (creds) => {
 
 // Fallback static credentials for demo/corporate environments
 const STATIC_CREDS = {
-    accessKeyId: "PURGED_ID",
-    secretAccessKey: "PURGED_SECRET",
+    accessKeyId: "",
+    secretAccessKey: "",
     sessionToken: ""
 };
 
