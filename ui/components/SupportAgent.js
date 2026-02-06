@@ -83,7 +83,12 @@ const SupportAgent = ({ state, onClose }) => {
                     stage: state?.projectMetadata?.currentStage,
                     status: state?.governance?.status,
                     blockers: state?.governance?.blockers || [],
-                    artifacts: state?.artifacts
+                    artifacts: state?.artifacts,
+                    projectMetadata: state?.projectMetadata,
+                    auditLog: state?.auditLog,
+                    tasks: state?.chainOfThought && state.chainOfThought.length > 0
+                        ? state.chainOfThought[state.chainOfThought.length - 1].tasks
+                        : []
                 }
             });
 
@@ -130,6 +135,26 @@ const SupportAgent = ({ state, onClose }) => {
                     </TouchableOpacity>
                 )}
             </View>
+
+            {/* Risk Summary Widget */}
+            {state?.projectMetadata?.riskLevel && (
+                <View style={{
+                    padding: 12,
+                    backgroundColor: theme.mode === 'dark' ? 'rgba(255, 165, 0, 0.15)' : '#FFF8E1',
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.colors.border
+                }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 16, marginRight: 6 }}>⚠️</Text>
+                        <Text style={{ fontWeight: 'bold', color: theme.colors.warning }}>
+                            Risk Level: {state.projectMetadata.riskLevel}
+                        </Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: theme.colors.textSecondary, lineHeight: 16 }}>
+                        {state?.auditLog?.find(e => e.agent === 'Risk & Triage')?.reason || 'Assessment pending...'}
+                    </Text>
+                </View>
+            )}
 
             {/* Messages */}
             <ScrollView

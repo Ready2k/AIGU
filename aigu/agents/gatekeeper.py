@@ -55,6 +55,39 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
     thought_process = analysis.get("thoughtProcess", "Compliance check complete.")
     action_summary = analysis.get("actionSummary", "Evaluated signals.")
 
+    # --- GATEKEEPER ENFORCEMENT RULES (Refactored) ---
+    path = project_metadata.get("path", "Standard")
+    current_stage = project_metadata.get("currentStage", "Intake")
+    
+    # Rule 1 & 3: Mandatory Admin Signature for Accelerator Path
+    if path == "Accelerator" and new_status in ["Approved", "Live", "Production-Ready", "POC-Approved"]:
+        has_admin_approval = False
+        audit_log = state.get("auditLog", [])
+        for entry in audit_log:
+            # Check for Admin approval signal
+            if entry.get("agent") in ["Admin", "GIGC Admin"] and "APPROVE" in str(entry.get("action", "")).upper():
+                has_admin_approval = True
+                break
+        
+        if not has_admin_approval:
+            print("Gatekeeper: Blocking Accelerator project due to missing Admin Signature.")
+            new_status = "Pending"
+            blockers.append("GIGC Admin Approval Required (Accelerator Path)")
+            thought_process += "\n\n[Gatekeeper Oversight]: Accelerator projects require formal Admin signature (HITL) before approval. Reverting to Pending."
+            action_summary = "Blocked: Missing Admin Signature"
+            # Specific reasoning for Support Agent
+            compliance_note = "Your technical approach is excellent, but because this is a High-Impact AI project, it requires a formal GIGC Admin signature before moving to the next phase."
+    
+    # Rule 2: Lifecycle Enforcement (Pilot Check for High Risk)
+    if risk_level in ["High", "Critical"] and new_status in ["Live", "Production-Ready"] and current_stage not in ["Pilot", "Production"]:
+        print("Gatekeeper: Blocking High-Risk project skipping Pilot.")
+        new_status = "In-Review"
+        blockers.append("Must complete Pilot Phase verification")
+        thought_process += "\n\n[Gatekeeper Oversight]: High-Risk projects cannot skip Pilot phase. Reverting to In-Review."
+        action_summary = "Blocked: Lifecycle Violation (Skipped Pilot)"
+        
+    # -----------------------------------------------
+
     # 2. Persistence & Audit
     s3_uri = upload_reasoning_to_s3(submission_id, "Gatekeeper", thought_process)
 
@@ -63,11 +96,15 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
     new_governance["blockers"] = blockers
     
     timestamp = datetime.now(timezone.utc).isoformat()
+    
+    # Use compliance_note if defined, else construct one
+    reason_text = locals().get('compliance_note', f"Decision: {new_status}. Blockers: {len(blockers)}")
+
     raw_entry = {
         "timestamp": timestamp,
         "agent": "Gatekeeper",
         "action": action_summary,
-        "reason": f"Decision: {new_status}. Blockers: {len(blockers)}",
+        "reason": reason_text,
         "reasoningContext": s3_uri,
         "userIdentity": get_current_user_identity()
     }
@@ -82,8 +119,13 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
         from aigu.notifications import send_governance_email
         from aigu.agents.support import support_agent
         
-        # Synthesize message using Support Agent
-        temp_state = {**state, "governance": new_governance, "projectMetadata": project_metadata}
+        # Synthesize message using Support Agent (Pass NEW Audit Log)
+        temp_state = {
+            **state, 
+            "governance": new_governance, 
+            "projectMetadata": project_metadata,
+            "auditLog": new_audit_log  # Crucial: Pass the new log so Support sees the reasoning
+        }
         support_output = support_agent(temp_state)
         ui_overlay = support_output.get("ui_overlay", {})
         message = ui_overlay.get("supportMessage", "New governance status update.")
@@ -107,7 +149,7 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
                 project_id=submission_id,
                 recipient_email="admin@aigu.io", # Configurable
                 role="Admin",
-                status_update=f"Project {submission_id} is awaiting your review.",
+                status_update=f"Project {submission_id} is awaiting your review: {blockers}",
                 admin_link="https://aigu.io/admin/queue"
             )
 

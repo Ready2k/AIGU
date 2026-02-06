@@ -50,7 +50,7 @@ export const useAiguState = (submissionId, userId) => {
     // 1. Fetch State
     const fetchState = useCallback(async () => {
         try {
-            const data = await signedFetch(`/state?submissionId=${submissionId}&userId=${userId}`);
+            const data = await signedFetch(`/state?submissionId=${encodeURIComponent(submissionId)}&userId=${encodeURIComponent(userId)}`);
             setGlobalState(data);
             setError(null);
         } catch (err) {
@@ -155,7 +155,7 @@ export const useAiguState = (submissionId, userId) => {
     const fetchDelta = async (currentId, previousId) => {
         try {
             console.log(`Fetching delta: ${currentId} vs ${previousId}`);
-            const result = await signedFetch(`/delta?currentId=${currentId}&previousId=${previousId}`);
+            const result = await signedFetch(`/delta?currentId=${encodeURIComponent(currentId)}&previousId=${encodeURIComponent(previousId)}`);
             return result;
         } catch (err) {
             console.error("Delta fetch failed", err);
@@ -175,7 +175,7 @@ export const useAiguState = (submissionId, userId) => {
     const fetchSessions = async (targetUserId) => {
         try {
             console.log(`Fetching sessions for user: ${targetUserId}`);
-            return await signedFetch(`/sessions?userId=${targetUserId}`);
+            return await signedFetch(`/sessions?userId=${encodeURIComponent(targetUserId)}`);
         } catch (err) {
             console.error("Failed to fetch sessions", err);
             return [];
@@ -267,7 +267,7 @@ export const useAiguState = (submissionId, userId) => {
     const listFiles = async (submissionId) => {
         try {
             console.log(`Listing files for submission: ${submissionId}`);
-            const result = await signedFetch(`/files?submissionId=${submissionId}&userId=${userId}`);
+            const result = await signedFetch(`/files?submissionId=${encodeURIComponent(submissionId)}&userId=${encodeURIComponent(userId)}`);
             return result || [];
         } catch (err) {
             console.error("Failed to list files", err);
@@ -293,7 +293,7 @@ export const useAiguState = (submissionId, userId) => {
     const deleteProject = async (targetSubmissionId, targetUserId) => {
         try {
             console.log(`Deleting project: ${targetSubmissionId} for user: ${targetUserId}`);
-            await signedFetch(`/state?submissionId=${targetSubmissionId}&userId=${targetUserId}`, {
+            await signedFetch(`/state?submissionId=${encodeURIComponent(targetSubmissionId)}&userId=${encodeURIComponent(targetUserId)}`, {
                 method: 'DELETE'
             });
             console.log("Project deleted successfully");

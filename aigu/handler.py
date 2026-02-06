@@ -330,7 +330,27 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             status = context.get('status', 'Unknown')
             blockers = context.get('blockers', [])
             blockers_text = ', '.join(blockers) if blockers else 'None'
+
+            # context extraction
+            project_metadata = context.get('projectMetadata', {})
+            risk_level = project_metadata.get('riskLevel', 'Unknown')
+            risk_reason = "No specific reasoning recorded."
             
+            # Extract Risk Reasoning from auditLog
+            audit_log = context.get('auditLog', [])
+            for entry in audit_log:
+                if entry.get('agent') == 'Risk & Triage':
+                    risk_reason = entry.get('reason', risk_reason)
+                    break
+            
+            # Extract Residual Risks if Live
+            residual_risks_text = ""
+            if status == 'Live' or stage == 'Handover':
+                tasks = context.get('tasks', [])
+                lct_task = next((t for t in tasks if t.get('team') == 'LCT'), None)
+                if lct_task:
+                    residual_risks_text = f"Residual Risks Task: {lct_task.get('task')} (Status: {lct_task.get('status')})"
+
             system_prompt = f"""You are the GIGC Support Assistant for the AI Governance Unit (AIGU).
 
 STRICT RESTRICTIONS:
@@ -347,11 +367,18 @@ Your role:
 - Clarify SLA timelines
 
 Current Project Context:
+- Project Name: {project_metadata.get('name', 'Unknown')}
 - Stage: {stage}
 - Status: {status}
+- Risk Level: {risk_level}
+- Risk Reasoning: {risk_reason}
+{f"- Residual Risks Focus: {residual_risks_text}" if residual_risks_text else ""}
 - Blockers: {blockers_text}
 
-Be concise, professional, and helpful. If you don't know something, say so."""
+MANDATORY BEHAVIORS:
+1. If the user asks about 'Risk', you MUST start with: "This project was categorized as {risk_level} Risk because {risk_reason}." Then mention the SLA status.
+2. If Status is 'Live', focus on the Residual Risks (LCT tasks) rather than generic advice.
+3. Be concise and professional."""
             
             try:
                 # Call Amazon Nova
@@ -403,7 +430,7 @@ Be concise, professional, and helpful. If you don't know something, say so."""
             # Filter for Reviewable items (Draft, Pending, In-Review, Blocked)
             review_queue = [
                 item for item in items 
-                if item.get('governance', {}).get('status') in ['Draft', 'Pending', 'In-Review', 'Blocked']
+                if item.get('governance', {}).get('status') in ['Draft', 'Pending', 'In-Review', 'Blocked', 'Approved', 'Live']
             ]
             
             print(f"Admin Queue: Filtered to {len(review_queue)} reviewable items")
