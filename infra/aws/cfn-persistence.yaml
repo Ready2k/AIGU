@@ -59,7 +59,17 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+               SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - 'http://localhost:8081'
+              - 'http://localhost:19006'
+            AllowedMethods:
+              - GET
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3000
 
   # 4. LangGraph Checkpoints Table
   AIGUCheckpointsTable:

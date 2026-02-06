@@ -83,7 +83,28 @@ Resources:
           - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
           - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
 
-  # 3. Permissions (Gateway -> Lambda)
+  # 3. Gateway Responses (Enable CORS for IAM Rejection)
+  GatewayResponse4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+      ResponseType: DEFAULT_4XX
+      RestApiId: !Ref AIGUApiGateway
+
+  GatewayResponse5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+      ResponseType: DEFAULT_5XX
+      RestApiId: !Ref AIGUApiGateway
+
+  # 4. Permissions (Gateway -> Lambda)
   ApiGatewayInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -92,20 +113,20 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AIGUApiGateway}/*/*/*'
 
-  # 4. Deployment (New Logical ID V5 to force redeploy)
-  AIGUApiDeploymentV5:
+  # 5. Deployment (New Logical ID V6 to force redeploy)
+  AIGUApiDeploymentV6:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: [InvokeMethodIAM, InvokeOptionsMethod, StateMethodIAM, StateOptionsMethod]
+    DependsOn: [InvokeMethodIAM, InvokeOptionsMethod, StateMethodIAM, StateOptionsMethod, GatewayResponse4XX, GatewayResponse5XX]
     Properties:
       RestApiId: !Ref AIGUApiGateway
-      Description: Re-enable IAM Auth with explicit methods and OPTIONS fallback
+      Description: Enable GatewayResponse CORS for 4XX/5XX
 
   AIGUApiStage:
     Type: AWS::ApiGateway::Stage
     Properties:
       StageName: v1
       RestApiId: !Ref AIGUApiGateway
-      DeploymentId: !Ref AIGUApiDeploymentV5
+      DeploymentId: !Ref AIGUApiDeploymentV6
 
 Outputs:
   ApiEndpoint:

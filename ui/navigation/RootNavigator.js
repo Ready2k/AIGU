@@ -9,14 +9,20 @@ import SupportStatus from '../screens/SupportStatus';
 import DeltaReview from '../screens/DeltaReview';
 import AdminDashboard from '../screens/AdminDashboard';
 import LogViewer from '../screens/LogViewer';
+import DevConsole from '../screens/DevConsole'; // Added DevConsole import
 import { TouchableOpacity } from 'react-native';
 
 const RootNavigator = ({ submissionId, userId, isAdmin }) => {
     // 1. Session Recovery & State Subscription via Hook
     const { state, loading, actions, computed, error } = useAiguState(submissionId, userId);
     const [showLogs, setShowLogs] = React.useState(false);
+    const [showDevConsole, setShowDevConsole] = React.useState(false); // Added showDevConsole state
 
     const renderContent = () => {
+        if (showDevConsole) { // Added DevConsole rendering condition
+            return <DevConsole onClose={() => setShowDevConsole(false)} />;
+        }
+
         if (!state && loading) {
             return (
                 <View style={styles.centerContainer}>
@@ -31,6 +37,12 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
                 <View style={styles.centerContainer}>
                     <Text style={{ ...AIGU_THEME.typography.header, color: AIGU_THEME.colors.error }}>Connection Error</Text>
                     <Text style={{ marginBottom: 20, color: AIGU_THEME.colors.textPrimary }}>{error?.message || "Failed to load state."}</Text>
+                    <TouchableOpacity
+                        style={{ padding: 12, backgroundColor: AIGU_THEME.colors.primary, borderRadius: 6, marginBottom: 12 }}
+                        onPress={() => setShowDevConsole(true)}
+                    >
+                        <Text style={{ color: '#FFF', fontWeight: 'bold' }}>UPDATE AWS CREDENTIALS</Text>
+                    </TouchableOpacity>
                     <Text style={{ color: AIGU_THEME.colors.textSecondary }}>Check console for CORS or Network details.</Text>
                 </View>
             );

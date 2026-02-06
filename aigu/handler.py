@@ -56,9 +56,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             langfuse_handler = CallbackHandler()
             
             # 4.1 Normalize Payload for LangGraph State
-            # The frontend sends: { agent, submissionId, userId, payload }
-            # LangGraph expects GlobalState structure.
-            # We map submissionId to LangFuse Session and userId to LangFuse User via metadata.
             metadata = {
                 "langfuse_session_id": submission_id,
                 "langfuse_user_id": user_id
@@ -67,7 +64,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             inner_payload = payload.get("payload", {})
 
             # --- Explicit Initialization Block ---
-            # persists the intakeData to AIGU_Global_State before invoking the graph
             if agent == "intake":
                 import boto3
                 dynamodb = boto3.resource('dynamodb')
@@ -90,18 +86,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             }
 
             if agent == "intake":
-                # Map DiscoveryCanvas data
-                graph_input["artifacts"] = {
-                    "intakeData": inner_payload
-                }
+                graph_input["artifacts"] = {"intakeData": inner_payload}
             elif agent == "outcome":
-                # Map DeltaReview data (e.g. scopeAck)
-                # In this mock, we might just merge it or use it to update governance
-                graph_input["governance"] = {
-                    "status": "Approved" if inner_payload.get("scopeAck") else "Blocked"
-                }
+                graph_input["governance"] = {"status": "Approved" if inner_payload.get("scopeAck") else "Blocked"}
             else:
-                # Direct invocation fallback (for CLI tests)
                 graph_input.update(payload)
 
             # Pass trace callbacks and metadata
@@ -116,18 +104,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if hasattr(langfuse_handler, "client"):
                 langfuse_handler.client.flush()
             
+            # Enrich with fresh pre-signed URLs
+            enriched_result = enrich_state_with_presigned_urls(result)
+            
             return {
                 "statusCode": 200,
                 "headers": headers,
-                "body": json.dumps(result, default=str)
+                "body": json.dumps(enriched_result, default=str)
             }
 
         # --- PATH: /state ---
         elif "/state" in path:
             state_data = app.get_state(config)
             
-            # If no state exists yet, return an empty template rather than a 404
-            # to prevent frontend from breaking on new submissions
             if not state_data or not state_data.values:
                 return {
                     "statusCode": 200,
@@ -137,14 +126,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         "userId": user_id,
                         "projectMetadata": {"currentStage": "Intake", "path": "Pending"},
                         "governance": {"status": "New"},
-                        "auditLog": []
+                        "auditLog": [],
+                        "ui_overlay": {"reasoningUrls": {}}
                     })
                 }
+
+            # Enrich with fresh pre-signed URLs
+            enriched_state = enrich_state_with_presigned_urls(dict(state_data.values))
 
             return {
                 "statusCode": 200,
                 "headers": headers,
-                "body": json.dumps(state_data.values, default=str)
+                "body": json.dumps(enriched_state, default=str)
             }
 
         # --- UNKNOWN PATH ---
@@ -163,3 +156,36 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "headers": headers,
             "body": json.dumps({"message": str(e), "type": type(e).__name__})
         }
+
+def enrich_state_with_presigned_urls(state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Generates fresh pre-signed S3 URLs for all reasoning context URIs in the audit log.
+    Stored in ui_overlay.reasoningUrls mapping.
+    """
+    import boto3
+    s3 = boto3.client('s3')
+    reasoning_urls = {}
+    
+    audit_log = state.get("auditLog", [])
+    for entry in audit_log:
+        s3_uri = entry.get("reasoningContext")
+        if s3_uri and s3_uri.startswith("s3://"):
+            try:
+                # Parse URI: s3://bucket/key
+                parts = s3_uri.replace("s3://", "").split("/", 1)
+                if len(parts) == 2:
+                    bucket, key = parts
+                    url = s3.generate_presigned_url(
+                        'get_object',
+                        Params={'Bucket': bucket, 'Key': key},
+                        ExpiresIn=3600 # 1 Hour
+                    )
+                    reasoning_urls[s3_uri] = url
+            except Exception as e:
+                print(f"Warning: Failed to pre-sign {s3_uri}: {e}")
+
+    state["ui_overlay"] = {
+        **(state.get("ui_overlay", {}) or {}),
+        "reasoningUrls": reasoning_urls
+    }
+    return state

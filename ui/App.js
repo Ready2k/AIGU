@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, SafeAreaView, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import RootNavigator from './navigation/RootNavigator';
+import DevConsole from './screens/DevConsole';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useAiguTheme } from './theme/ThemeContext';
 
@@ -11,6 +12,11 @@ function AppContent() {
     const [submissionId, setSubmissionId] = useState('test-123');
     const [userId, setUserId] = useState('demo-user-123');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [showDevConsole, setShowDevConsole] = useState(false);
+
+    if (showDevConsole) {
+        return <DevConsole onClose={() => setShowDevConsole(false)} />;
+    }
 
     if (!isLoggedIn) {
         return (
@@ -54,6 +60,13 @@ function AppContent() {
                         onPress={() => setIsLoggedIn(true)}
                     >
                         <Text style={styles.buttonText}>Enter Workspace</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={{ marginTop: 16, alignItems: 'center' }}
+                        onPress={() => setShowDevConsole(true)}
+                    >
+                        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>⚙️ CONFIGURE AWS CREDENTIALS</Text>
                     </TouchableOpacity>
                 </View>
             </View>
