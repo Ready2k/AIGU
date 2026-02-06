@@ -231,7 +231,7 @@ export const useAiguState = (submissionId, userId) => {
     const isApproved = status === 'Approved' || status === 'POC-Approved' || status === 'Production-Ready' || status === 'Live';
 
     // Engaged means the project has started governance (past initial intake)
-    const isEngaged = currentStage !== 'Intake' || status !== 'Draft';
+    const isEngaged = currentStage !== 'Intake' || (status !== 'Draft' && status !== 'New' && !!status);
     const isDeltaBlocked = isBlocked && (blockers.some(b => b.includes("Delta")) || blockers.some(b => b.includes("threshold")));
 
     return {

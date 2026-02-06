@@ -15,31 +15,51 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     existing_metadata = state.get("projectMetadata", {})
     existing_stage = existing_metadata.get("currentStage", "Intake")
     
-    path = "Stop"
-    action = "Project Stopped"
-    reason = "Does not meet criteria"
+    # Shadow IT Detection (Domain Specificity)
+    unapproved_domains = ["dropbox.com", "dropbox", "googledrive.com", "unverified-docs-site.io", "github.com/personal"]
+    detected_domains = [d for d in unapproved_domains if d in description]
     
     # CoT Simulation
     cot_steps = [
         f"Analyzing description: '{description[:50]}...'",
-        "Checking for 'Hero Capability' or 'GenAI' keywords...",
+        "Checking for unapproved external domains (Shadow IT)...",
     ]
 
-    if "hero capability" in description or "genai" in description or "llm" in description:
+    path = "Standard"
+    action = "Path set to Standard (Default)"
+    reason = "Default standard governance path"
+    # Multi-Stage Support: If project is already past Intake, pass through
+    if existing_stage != "Intake" and existing_metadata.get("path") in ["Accelerator", "BAU", "Standard"]:
+        cot_steps.append(f"Project already in {existing_stage} stage. Passing through.")
+        return {
+            "projectMetadata": existing_metadata,
+            "auditLog": state.get("auditLog", []),
+            "governance": state.get("governance", {})
+        }
+
+    remediation = None
+    if detected_domains:
+        path = "Stop"
+        action = "Project Blocked (Security)"
+        reason = f"Blocked due to unapproved external domains: {', '.join(detected_domains)}."
+        cot_steps.append(f"CRITICAL: {reason}")
+        remediation = "Please migrate code to the official GitLab and use approved documentation sources to proceed."
+        cot_steps.append(f"Remediation suggested: {remediation}")
+    elif "hero capability" in description or "genai" in description or "llm" in description:
         path = "Accelerator"
         action = "Path set to Accelerator"
         reason = "GenAI/Hero Capability detected"
         cot_steps.append("Match found: GenAI/Hero keywords present.")
         cot_steps.append("Decision: Route to Accelerator Path.")
     elif "standard" in description or "bau" in description:
-        path = "BAU"
-        action = "Path set to BAU"
+        path = "Standard"
+        action = "Path set to Standard"
         reason = "Standard project request"
         cot_steps.append("Match found: Standard/BAU keywords.")
-        cot_steps.append("Decision: Route to BAU Path.")
+        cot_steps.append("Decision: Route to Standard Path.")
     else:
-        cot_steps.append("No valid keywords found.")
-        cot_steps.append("Decision: Stop process.")
+        cot_steps.append("No prohibited domains detected. No specific GenAI keywords found.")
+        cot_steps.append("Decision: Soft pivot to Standard Path.")
 
     reasoning_text = "\n".join(cot_steps)
     s3_uri = upload_reasoning_to_s3(submission_id, "Intake Orchestrator", reasoning_text)
@@ -47,10 +67,16 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     # Update State
     new_metadata = existing_metadata.copy()
     new_metadata["path"] = path
-    if path != "Stop":
-        new_metadata["currentStage"] = "Pilot"
+    
+    if path == "Accelerator":
+        # Accelerator projects go to Design/POC first
+        new_metadata["currentStage"] = "POC"
+    elif path == "Standard":
+        # Standard projects go to Risk Triage
+        new_metadata["currentStage"] = "Risk"
     else:
         new_metadata["currentStage"] = "Intake"
+
     if "name" not in new_metadata:
         new_metadata["name"] = project_name
 
@@ -78,7 +104,10 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     if path == "Stop":
         new_governance["status"] = "Blocked"
         new_governance["blockers"] = [reason]
+        if remediation:
+            new_governance["remediation"] = remediation
     elif not new_governance.get("status") or new_governance.get("status") == "New":
+        # Successfully passed intake, move to Draft
         new_governance["status"] = "Draft"
 
     return {

@@ -55,10 +55,21 @@ const SupportStatus = ({ state, onViewLog, refresh }) => {
                                 ⚠️ Blockers Detected
                             </Text>
                             {blockers.map((b, i) => (
-                                <Text key={i} style={{ ...theme.typography.body, color: theme.colors.textPrimary, marginVertical: 2 }}>
+                                <Text key={i} style={{ ...theme.typography.body, color: theme.colors.textPrimary, marginVertical: 2, fontWeight: '600' }}>
                                     • {b}
                                 </Text>
                             ))}
+
+                            {governance.remediation && (
+                                <View style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(209, 50, 18, 0.2)' }}>
+                                    <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, fontWeight: '700', marginBottom: 4 }}>
+                                        🛠️ How to Fix:
+                                    </Text>
+                                    <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, fontStyle: 'italic' }}>
+                                        {governance.remediation}
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                     )}
 

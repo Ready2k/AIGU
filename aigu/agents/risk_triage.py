@@ -34,15 +34,19 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     sla_deadline_str = deadline_date.date().isoformat()
     cot_steps.append(f"assigned SLA: {sla_days} days (Deadline: {sla_deadline_str})")
     
-    reasoning_text = "\n".join(cot_steps)
-    s3_uri = upload_reasoning_to_s3(submission_id, "Risk & Triage", reasoning_text)
-
     # State Update
     new_metadata = project_metadata.copy()
     new_metadata["riskLevel"] = risk_level
     
     new_governance = state.get("governance", {}).copy()
     new_governance["slaDeadline"] = sla_deadline_str
+    
+    if path == "Standard":
+        new_governance["status"] = "Approved"
+        cot_steps.append("Standard path detected: Project Auto-Approved.")
+    
+    reasoning_text = "\n".join(cot_steps)
+    s3_uri = upload_reasoning_to_s3(submission_id, "Risk & Triage", reasoning_text)
 
     # Audit
     timestamp = datetime.now(timezone.utc).isoformat()

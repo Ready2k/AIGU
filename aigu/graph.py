@@ -45,23 +45,37 @@ def build_aigu_graph():
     workflow.add_edge(START, "intake")
     
     # Route from intake based on path
-    def route_intake(state: GlobalState) -> Literal["poc", "risk_triage", "support"]:
+    def route_intake(state: GlobalState) -> Literal["poc", "pilot", "production", "risk_triage", "support"]:
         """
-        Route from intake based on project path.
+        Route from intake based on project path and current stage.
         
         - Stop → Support (project rejected)
-        - Standard → Risk Triage (low-risk auto-approve path)
-        - Accelerator → POC (high-risk multi-stage path)
+        - Standard Path → Risk Triage (auto-approve)
+        - Accelerator Path:
+            - Intake Stage → POC
+            - Pilot Stage → Pilot
+            - Production Stage → Production
         """
-        path = state.get("projectMetadata", {}).get("path", "Stop")
+        metadata = state.get("projectMetadata", {})
+        path = metadata.get("path", "Stop")
+        stage = metadata.get("currentStage", "Intake")
         
         if path == "Stop":
             print("  → Routing to Support (project stopped)")
             return "support"
-        elif path == "Standard":
+        
+        if path == "Standard":
             print("  → Routing to Risk Triage (standard path)")
             return "risk_triage"
-        else:  # Accelerator
+        
+        # Accelerator Path - Stage Based Routing
+        if stage == "Production":
+            print("  → Routing to Production (resubmission)")
+            return "production"
+        elif stage == "Pilot" or stage == "Pilot-Complete":
+            print("  → Routing to Pilot (resubmission)")
+            return "pilot"
+        else:
             print("  → Routing to POC (accelerator path)")
             return "poc"
     

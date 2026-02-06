@@ -78,7 +78,7 @@ const RootNavigator = ({ submissionId, userId, isAdmin }) => {
         const status = state.governance?.status;
 
         // Routing Logic
-        if (stage === 'Intake' && status === 'Draft') {
+        if (stage === 'Intake' && (status === 'Draft' || status === 'New' || !status)) {
             return <DiscoveryCanvas actions={actions} />;
         }
 
