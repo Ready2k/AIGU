@@ -20,12 +20,26 @@ Resources:
       ParentId: !GetAtt AIGUApiGateway.RootResourceId
       PathPart: invoke
 
-  InvokeMethod:
+  InvokeMethodIAM:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref AIGUApiGateway
       ResourceId: !Ref InvokeResource
-      HttpMethod: ANY
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  InvokeOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref InvokeResource
+      HttpMethod: OPTIONS
       AuthorizationType: NONE
       Integration:
         Type: AWS_PROXY
@@ -41,12 +55,26 @@ Resources:
       ParentId: !GetAtt AIGUApiGateway.RootResourceId
       PathPart: state
 
-  StateMethod:
+  StateMethodIAM:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref AIGUApiGateway
       ResourceId: !Ref StateResource
-      HttpMethod: ANY
+      HttpMethod: GET
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  StateOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref StateResource
+      HttpMethod: OPTIONS
       AuthorizationType: NONE
       Integration:
         Type: AWS_PROXY
@@ -64,20 +92,20 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AIGUApiGateway}/*/*/*'
 
-  # 4. Deployment (New Logical ID V3 to force redeploy)
-  AIGUApiDeploymentV3:
+  # 4. Deployment (New Logical ID V5 to force redeploy)
+  AIGUApiDeploymentV5:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: [InvokeMethod, StateMethod]
+    DependsOn: [InvokeMethodIAM, InvokeOptionsMethod, StateMethodIAM, StateOptionsMethod]
     Properties:
       RestApiId: !Ref AIGUApiGateway
-      Description: Update to ANY method for full proxy coverage including CORS
+      Description: Re-enable IAM Auth with explicit methods and OPTIONS fallback
 
   AIGUApiStage:
     Type: AWS::ApiGateway::Stage
     Properties:
       StageName: v1
       RestApiId: !Ref AIGUApiGateway
-      DeploymentId: !Ref AIGUApiDeploymentV3
+      DeploymentId: !Ref AIGUApiDeploymentV5
 
 Outputs:
   ApiEndpoint:

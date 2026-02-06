@@ -31,6 +31,7 @@ deploy() {
       --python-version 3.12 \
       --only-binary=:all: \
       --upgrade \
+      --no-cache-dir \
       -r requirements-prod.txt
   
   echo "Build Logic Contents:"
@@ -58,15 +59,29 @@ deploy() {
 
 # --- Function: Smoke Test the "Brain" ---
 test_brain() {
+  # Load .env variables if present
+  if [ -f .env ]; then
+    export $(cat .env | xargs)
+  fi
+
   API_URL=$(aws cloudformation describe-stacks --stack-name ${STACK_BASE}-gateway --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' --output text --region ${REGION})
   echo "🧠 Testing Intake Agent via $API_URL..."
   
-  # Sending a mock "High Risk" payload to trigger Nova reasoning
-  curl -X POST "${API_URL}/invoke" \
-    -H "Content-Type: application/json" \
-    -d '{"artifacts": {"intakeData": {"projectName": "Shadow Test", "description": "Implementing a new GenAI Accelerator."}}, "submissionId": "test-123", "userId": "user-123"}'
+  # Constructing optional session token header
+  TOKEN_HEADER=""
+  if [ -n "$AWS_SESSION_TOKEN" ]; then
+    TOKEN_HEADER="-H \"X-Amz-Security-Token: $AWS_SESSION_TOKEN\""
+  fi
+
+  # Sending a mock "High Risk" payload with AWS SigV4 signatures
+  eval "curl -s -X POST \"${API_URL}/invoke\" \
+    --aws-sigv4 \"aws:amz:us-east-1:execute-api\" \
+    --user \"${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}\" \
+    $TOKEN_HEADER \
+    -H \"Content-Type: application/json\" \
+    -d '{\"artifacts\": {\"intakeData\": {\"projectName\": \"Shadow Test\", \"description\": \"Implementing a new GenAI Accelerator.\"}}, \"submissionId\": \"test-123\", \"userId\": \"user-123\"}'" | jq .
     
-  echo -e "\n✅ Test Payload Sent. Check logs for reasoning context."
+  echo -e "\n✅ Authenticated Test Payload Sent."
 }
 
 # --- Function: Tail Agent Logic Logs ---

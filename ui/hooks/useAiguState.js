@@ -139,6 +139,8 @@ export const useAiguState = (submissionId, userId) => {
     const status = governance.status;
     const blockers = governance.blockers || [];
     const isBlocked = status === 'Blocked';
+    const isInReview = status === 'In-Review';
+    const isEngaged = isBlocked || isInReview;
     const isDeltaBlocked = isBlocked && blockers.some(b => b.includes("Delta Threshold"));
 
     return {
@@ -154,6 +156,8 @@ export const useAiguState = (submissionId, userId) => {
         },
         computed: {
             isBlocked,
+            isInReview,
+            isEngaged,
             isDeltaBlocked,
             blockers,
             currentStage: globalState?.projectMetadata?.currentStage || 'Intake',

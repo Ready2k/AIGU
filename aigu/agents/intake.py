@@ -47,7 +47,9 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     # Update State
     new_metadata = existing_metadata.copy()
     new_metadata["path"] = path
-    if "currentStage" not in new_metadata:
+    if path != "Stop":
+        new_metadata["currentStage"] = "Pilot"
+    else:
         new_metadata["currentStage"] = "Intake"
     if "name" not in new_metadata:
         new_metadata["name"] = project_name
@@ -72,7 +74,15 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     new_audit_log = state.get("auditLog", []).copy()
     new_audit_log.append(audit_entry)
     
+    new_governance = state.get("governance", {}).copy()
+    if path == "Stop":
+        new_governance["status"] = "Blocked"
+        new_governance["blockers"] = [reason]
+    elif not new_governance.get("status") or new_governance.get("status") == "New":
+        new_governance["status"] = "Draft"
+
     return {
         "projectMetadata": new_metadata,
-        "auditLog": new_audit_log
+        "auditLog": new_audit_log,
+        "governance": new_governance
     }

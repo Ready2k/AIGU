@@ -1,6 +1,6 @@
+boto3>=1.34.0
 langgraph
 langchain
 pydantic
 langfuse
 langgraph-checkpoint-dynamodb
-boto3

@@ -82,7 +82,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 graph_input.update(payload)
 
             # Pass trace callbacks
+            print(f"Invoking graph with input: {json.dumps(graph_input, default=str)}")
             result = app.invoke(graph_input, config={**config, "callbacks": [langfuse_handler]})
+            print(f"Graph result: {json.dumps(result, default=str)}")
             
             if hasattr(langfuse_handler, "client"):
                 langfuse_handler.client.flush()
