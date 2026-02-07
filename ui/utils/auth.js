@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AwsClient } from 'aws4fetch';
+import { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN } from '@env';
 
 const AUTH_KEYS = {
     ACCESS_KEY: 'aigu_access_key',
@@ -21,11 +22,11 @@ export const saveCredentials = async (creds) => {
     }
 };
 
-// Fallback static credentials for demo/corporate environments
+// Load credentials from .env file (for local development)
 const STATIC_CREDS = {
-    accessKeyId: "",
-    secretAccessKey: "",
-    sessionToken: ""
+    accessKeyId: AWS_ACCESS_KEY_ID || "",
+    secretAccessKey: AWS_SECRET_ACCESS_KEY || "",
+    sessionToken: AWS_SESSION_TOKEN || ""
 };
 
 export const getCredentials = async () => {

@@ -290,6 +290,32 @@ export const useAiguState = (submissionId, userId) => {
         }
     };
 
+    const fetchPrompts = async () => {
+        console.log("Fetching prompts from /admin/prompts");
+        try {
+            const result = await signedFetch('/admin/prompts');
+            return result || [];
+        } catch (err) {
+            console.error("Failed to fetch prompts", err);
+            return [];
+        }
+    };
+
+    const updatePrompt = async (name, content, tags = ['production']) => {
+        try {
+            console.log(`Updating prompt: ${name}`);
+            const result = await signedFetch('/admin/prompts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, content, tags })
+            });
+            return result;
+        } catch (err) {
+            console.error("Failed to update prompt", err);
+            throw err;
+        }
+    };
+
     const deleteProject = async (targetSubmissionId, targetUserId) => {
         try {
             console.log(`Deleting project: ${targetSubmissionId} for user: ${targetUserId}`);
@@ -338,7 +364,10 @@ export const useAiguState = (submissionId, userId) => {
             deleteProject,
             getUploadUrl,
             listFiles,
-            askSupportAgent
+            listFiles,
+            askSupportAgent,
+            fetchPrompts,
+            updatePrompt
         },
         computed: {
             isBlocked,

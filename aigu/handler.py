@@ -444,6 +444,100 @@ MANDATORY BEHAVIORS:
                 "body": json.dumps(enriched_queue, default=str)
             }
 
+        # --- PATH: /admin/prompts ---
+        elif "/admin/prompts" in path:
+            from aigu.llm import get_langfuse_client
+            
+            if method == "GET":
+                # Fetch all prompts with 'production' tag from LangFuse
+                try:
+                    langfuse = get_langfuse_client()
+                    if not langfuse:
+                        return {
+                            "statusCode": 500,
+                            "headers": headers,
+                            "body": json.dumps({"error": "LangFuse client not configured"})
+                        }
+                    
+                    # Fetch prompts - LangFuse SDK returns prompt objects
+                    # We need to get the list and extract relevant fields
+                    prompts_list = []
+                    
+                    # Get all prompts (LangFuse doesn't have a direct list_prompts method)
+                    # We'll fetch known prompt names from our system
+                    prompt_names = ['intake-orchestrator', 'risk-triage', 'gatekeeper', 'support-agent', 'librarian_agent']
+                    
+                    for prompt_name in prompt_names:
+                        try:
+                            prompt = langfuse.get_prompt(prompt_name, label='production')
+                            if prompt:
+                                prompts_list.append({
+                                    'name': prompt_name,
+                                    'content': prompt.prompt,
+                                    'type': prompt.type if hasattr(prompt, 'type') else 'text',
+                                    'version': prompt.version if hasattr(prompt, 'version') else 1,
+                                    'tags': prompt.labels if hasattr(prompt, 'labels') else ['production']
+                                })
+                        except Exception as e:
+                            print(f"Could not fetch prompt {prompt_name}: {e}")
+                            continue
+                    
+                    return {
+                        "statusCode": 200,
+                        "headers": headers,
+                        "body": json.dumps(prompts_list)
+                    }
+                except Exception as e:
+                    print(f"Error fetching prompts: {e}")
+                    return {
+                        "statusCode": 500,
+                        "headers": headers,
+                        "body": json.dumps({"error": str(e)})
+                    }
+            
+            elif method == "POST":
+                # Create or update a prompt in LangFuse
+                try:
+                    langfuse = get_langfuse_client()
+                    if not langfuse:
+                        return {
+                            "statusCode": 500,
+                            "headers": headers,
+                            "body": json.dumps({"error": "LangFuse client not configured"})
+                        }
+                    
+                    prompt_data = payload
+                    name = prompt_data.get('name')
+                    content = prompt_data.get('content')
+                    tags = prompt_data.get('tags', ['production'])
+                    
+                    if not name or not content:
+                        return {
+                            "statusCode": 400,
+                            "headers": headers,
+                            "body": json.dumps({"error": "name and content required"})
+                        }
+                    
+                    # Create prompt in LangFuse
+                    langfuse.create_prompt(
+                        name=name,
+                        prompt=content,
+                        labels=tags
+                    )
+                    
+                    return {
+                        "statusCode": 200,
+                        "headers": headers,
+                        "body": json.dumps({"status": "success", "name": name})
+                    }
+                except Exception as e:
+                    print(f"Error updating prompt: {e}")
+                    return {
+                        "statusCode": 500,
+                        "headers": headers,
+                        "body": json.dumps({"error": str(e)})
+                    }
+
         # --- PATH: /sessions ---
         elif "/sessions" in path:
             import boto3

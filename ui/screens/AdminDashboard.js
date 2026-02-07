@@ -4,6 +4,7 @@ import { useAiguTheme } from '../theme/ThemeContext';
 import { useAiguState } from '../hooks/useAiguState';
 import WorkflowProgress from '../components/WorkflowProgress';
 import SupportAgent from '../components/SupportAgent';
+import PromptManager from '../components/PromptManager';
 
 /**
  * AdminDashboard Component - Desktop-Optimized Admin Interface
@@ -18,6 +19,7 @@ const AdminDashboard = ({ userId, onLogout }) => {
 
     // Use real state hook for admin actions
     const { actions } = useAiguState('temp', userId);
+    const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'prompts'
 
     // Queue Management
     const [queue, setQueue] = useState([]);
@@ -268,9 +270,26 @@ const AdminDashboard = ({ userId, onLogout }) => {
             {/* Left Sidebar - Filters & Stats */}
             <View style={[styles.sidebar, { backgroundColor: theme.colors.surface, borderRightColor: theme.colors.border }]}>
                 <View style={styles.sidebarHeader}>
-                    <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, fontSize: 18 }}>
-                        Admin Queue
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <TouchableOpacity onPress={() => setActiveTab('queue')} style={{ marginRight: 15 }}>
+                            <Text style={{
+                                ...theme.typography.header,
+                                color: activeTab === 'queue' ? theme.colors.primary : theme.colors.textSecondary,
+                                fontSize: 18
+                            }}>
+                                Queue
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setActiveTab('prompts')}>
+                            <Text style={{
+                                ...theme.typography.header,
+                                color: activeTab === 'prompts' ? theme.colors.primary : theme.colors.textSecondary,
+                                fontSize: 18
+                            }}>
+                                Prompts
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                     <TouchableOpacity onPress={refreshQueue}>
                         <Text style={{ color: theme.colors.accent, fontSize: 20 }}>↻</Text>
                     </TouchableOpacity>
@@ -377,8 +396,13 @@ const AdminDashboard = ({ userId, onLogout }) => {
             </View>
 
             {/* Center/Right Panel - Project Details */}
+            {/* Center/Right Panel - Project Details or Prompts */}
             <View style={styles.mainContent}>
-                {renderRightPanel()}
+                {activeTab === 'prompts' ? (
+                    <PromptManager userId={userId} />
+                ) : (
+                    renderRightPanel()
+                )}
             </View>
 
             {/* Request Info Modal */}

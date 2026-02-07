@@ -35,10 +35,12 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     # 1. Invoke Amazon Nova for Intelligent Consolidation
     print(f"Librarian: Invoking Amazon Nova for artifact consolidation.")
     analysis = query_nova_json(
-        system_prompt=LIBRARIAN_SYSTEM_PROMPT,
+        prompt_name="librarian_agent",  # Use LangFuse prompt (correct name)
         user_prompt=f"Risk Level: {risk_level}\nIntake Data: {intake_data}\nExisting technicalDesign: {tech_design}",
-        expected_keys=["updatedTechnicalDesign", "actionsTaken", "thoughtProcess"]
+        expected_keys=["updatedTechnicalDesign", "actionsTaken", "thoughtProcess", "missingSections"],
+        state=state  # Pass full state for variable substitution
     )
+
 
     updated_tech_design = analysis.get("updatedTechnicalDesign", tech_design)
     actions_taken = analysis.get("actionsTaken", ["Routine deduplication check."])
@@ -53,15 +55,32 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
         new_artifacts["complianceStatus"] = []
         actions_taken.append("Initialized Compliance Status for High Risk context.")
 
-    # 3. Persistence & Audit
+    # 3. Artifact Validation (NEW)
+    # Define required artifacts based on risk level
+    required_artifacts = ["intakeData", "technicalDesign"]
+    if risk_level == "Medium":
+        required_artifacts.append("complianceStatus")
+    elif risk_level == "High":
+        required_artifacts.extend(["complianceStatus", "securityReview", "dataFlowDiagram"])
+    
+    # Check for missing artifacts
+    missing_artifacts = [
+        art for art in required_artifacts 
+        if art not in new_artifacts or not new_artifacts.get(art)
+    ]
+    artifacts_valid = len(missing_artifacts) == 0
+    
+    print(f"Librarian: Artifact validation - Valid: {artifacts_valid}, Missing: {missing_artifacts}")
+
+    # 4. Persistence & Audit
     s3_uri = upload_reasoning_to_s3(submission_id, "Gov Librarian", thought_process)
 
     timestamp = datetime.now(timezone.utc).isoformat()
     raw_entry = {
         "timestamp": timestamp,
         "agent": "Gov Librarian",
-        "action": "Artifact Consolidation",
-        "reason": f"Actions: {'; '.join(actions_taken)}",
+        "action": "Artifact Consolidation & Validation",
+        "reason": f"Actions: {'; '.join(actions_taken)}. Artifacts Valid: {artifacts_valid}",
         "reasoningContext": s3_uri,
         "userIdentity": get_current_user_identity()
     }
@@ -71,7 +90,13 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     new_audit_log = state.get("auditLog", []).copy()
     new_audit_log.append(audit_entry)
     
+    # Update project metadata with validation results
+    new_project_metadata = project_metadata.copy()
+    new_project_metadata["artifactsValid"] = artifacts_valid
+    new_project_metadata["missingArtifacts"] = missing_artifacts
+    
     return {
         "artifacts": new_artifacts, 
-        "auditLog": new_audit_log
+        "auditLog": new_audit_log,
+        "projectMetadata": new_project_metadata
     }

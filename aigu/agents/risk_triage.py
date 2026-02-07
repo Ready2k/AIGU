@@ -2,25 +2,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Literal
 from aigu.state import GlobalState, AuditLogEntry
 from aigu.utils import upload_reasoning_to_s3, generate_audit_signature, get_current_user_identity
-from aigu.llm import query_nova_json
-
-RISK_SYSTEM_PROMPT = """
-You are the AIGU Risk & Triage Agent. Your role is to evaluate the technical complexity and data sensitivity of AI projects and assign a Risk Level and SLA.
-
-Risk Levels:
-- 'High': Assigned to all Generative AI (GenAI), Large Language Model (LLM), or AI Agent projects. These require deep scrutiny. SLA: 10 days.
-- 'Med': Assigned to projects involving internal data, new technical implementations, or medium complexity integrations. SLA: 7 days.
-- 'Low': Assigned to standard software deployments, low-risk tactical tools, or projects with no sensitive data/complex logic. SLA: 3 days.
-
-Analyze the description and path provided and return your decision in JSON format.
-If the path is 'Accelerator', it MUST be 'High' risk.
-If 'Standard', it is likely 'Low' or 'Med' unless specifically complex.
-
-JSON Structure Required:
-- riskLevel: String ('High', 'Med', 'Low')
-- slaDays: Integer (3, 7, or 10)
-- thoughtProcess: String (Detailed analysis of risk factors)
-"""
+from aigu.llm import query_nova_json, get_active_prompt
 
 def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     """
@@ -33,10 +15,23 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
 
     # 1. Invoke Amazon Nova for Intelligent Risk Analysis
     print(f"Risk: Invoking Amazon Nova for project risk triage.")
+    
+    try:
+        prompt_tmpl = get_active_prompt("risk-triage", tag="production")
+        system_prompt = prompt_tmpl.compile(
+            path=path,
+            description=description
+        )
+    except Exception as e:
+        print(f"Error loading prompt 'risk-triage': {e}")
+        system_prompt = "You are the AIGU Risk & Triage Agent. Evaluate risk level and SLA."
+
+    
     analysis = query_nova_json(
-        system_prompt=RISK_SYSTEM_PROMPT,
+        prompt_name="risk-triage",  # Use LangFuse prompt
         user_prompt=f"Path: {path}\nProject Description: {description}",
-        expected_keys=["riskLevel", "slaDays", "thoughtProcess"]
+        expected_keys=["riskLevel", "slaDays", "thoughtProcess"],
+        state=state  # Pass full state for variable substitution
     )
 
     risk_level = analysis.get("riskLevel", "Low")

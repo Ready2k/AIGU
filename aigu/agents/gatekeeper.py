@@ -2,26 +2,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List
 from aigu.state import GlobalState, AuditLogEntry
 from aigu.utils import upload_reasoning_to_s3, generate_audit_signature, get_current_user_identity
-from aigu.llm import query_nova_json
-
-GATEKEEPER_SYSTEM_PROMPT = """
-You are the AIGU Gatekeeper Agent. Your role is to manage compliance approvals and security guardrails for AI projects.
-
-Responsibilities:
-1. Security Check: Verify technical design links against the whitelisted domains: github.com, sharepoint.com. (Or as provided in the whitelist).
-2. Signal Evaluation: Analyze the 'complianceStatus' array which contains signals from Legal, GIGC, and other stakeholders.
-   - If ALL required stakeholders are 'Approved', and there are no security violations, the status should be 'Approved'.
-   - If ANY stakeholder is 'Challenged', or there is a security violation, the status should be 'Blocked'.
-   - If any stakeholder is 'Pending', the status remains 'In-Review'.
-3. Bootstrap: If this is a High Risk project with no 'complianceStatus' initialized yet, create the initial 'Pending' entries for 'Legal' and 'GIGC' and set status to 'In-Review'.
-
-JSON Structure Required:
-- status: String ('Approved', 'Blocked', 'In-Review')
-- blockers: List of Strings (Specific reasons if Blocked)
-- complianceStatus: List of Objects (Each with: horizontal, status, comment)
-- thoughtProcess: String (Detailed analysis)
-- actionSummary: String (Short description of what you did)
-"""
+from aigu.llm import query_nova_json, get_active_prompt
 
 def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
     """
@@ -43,11 +24,26 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
 
     # 1. Invoke Amazon Nova for Intelligent Gatekeeping
     print(f"Gatekeeper: Invoking Amazon Nova for compliance evaluation.")
+    
+    # Prepare state for prompt variable substitution
+    prompt_state = {
+        "risk_level": risk_level,
+        "current_status": current_status,
+        "compliance_status": compliance_status,
+        "tech_design": tech_design,
+        "whitelist": whitelist,
+        "files_uploaded": artifacts.get("files_uploaded", []),
+        "complianceStatus": compliance_status,
+        **state  # Include full state for any other variables
+    }
+    
     analysis = query_nova_json(
-        system_prompt=GATEKEEPER_SYSTEM_PROMPT,
+        prompt_name="gatekeeper",  # Use LangFuse prompt
         user_prompt=f"Current Status: {current_status}\nRisk Level: {risk_level}\nCompliance Signals: {compliance_status}\nTechnical Design: {tech_design}\nLink Whitelist: {whitelist}",
-        expected_keys=["status", "blockers", "complianceStatus", "thoughtProcess", "actionSummary"]
+        expected_keys=["status", "blockers", "complianceStatus", "thoughtProcess", "actionSummary"],
+        state=prompt_state  # Pass full state for variable substitution
     )
+
 
     new_status = analysis.get("status", current_status)
     blockers = analysis.get("blockers", [])

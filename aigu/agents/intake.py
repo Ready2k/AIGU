@@ -2,26 +2,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any
 from aigu.state import GlobalState, AuditLogEntry
 from aigu.utils import upload_reasoning_to_s3, generate_audit_signature, get_current_user_identity
-from aigu.llm import query_nova_json
-
-INTAKE_SYSTEM_PROMPT = """
-You are the AIGU Intake Orchestrator. Your role is to analyze project descriptions and categorize them into one of three paths:
-
-1. 'Accelerator': For projects involving Generative AI, Large Language Models (LLMs), AI Agents, or high-impact technical innovations.
-2. 'Standard': For business-as-usual projects, standard software updates, or low-risk tactical implementations.
-3. 'Stop': For projects that involve prohibited shadow IT services (e.g., personal cloud storage like Dropbox, personal Google Drive accounts, or unverified external document sites) or projects that clearly violate corporate security policies.
-
-Analyze the description provided by the user and return your decision in JSON format.
-You must be decisive. If the project mentions GenAI or LLMs, it MUST be 'Accelerator'.
-If the project mentions unapproved external domains for source code or data, it MUST be 'Stop'.
-
-JSON Structure Required:
-- path: String ('Accelerator', 'Standard', 'Stop')
-- reason: String (Concise explanation)
-- action: String (Short summary of the action)
-- remediation: String (Optional, only if path is 'Stop')
-- thoughtProcess: String (Detailed reasoning steps)
-"""
+from aigu.llm import query_nova_json, get_active_prompt
 
 def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     """
@@ -52,10 +33,20 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
 
     # 2. Invoke Amazon Nova for Intelligent Analysis
     print(f"Intake: Invoking Amazon Nova for project: {project_name}")
+    
+    try:
+        prompt_tmpl = get_active_prompt("intake-orchestrator", tag="production")
+        system_prompt = prompt_tmpl.compile(description=description)
+    except Exception as e:
+        print(f"Error loading prompt 'intake-orchestrator': {e}")
+        system_prompt = "You are the AIGU Intake Orchestrator. Analyze the description. classify as 'Accelerator', 'Standard', or 'Stop'."
+
+    
     analysis = query_nova_json(
-        system_prompt=INTAKE_SYSTEM_PROMPT,
+        prompt_name="intake-orchestrator",  # Use LangFuse prompt
         user_prompt=f"Project Description: {description}",
-        expected_keys=["path", "reason", "action", "thoughtProcess"]
+        expected_keys=["path", "reason", "action", "thoughtProcess"],
+        state=state  # Pass full state for variable substitution
     )
 
     path = analysis.get("path", "Standard")
