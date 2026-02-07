@@ -49,8 +49,18 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
         state=state  # Pass full state for variable substitution
     )
 
+    
     path = analysis.get("path", "Standard")
-    reason = analysis.get("reason", "Analyzed via Amazon Nova")
+    
+    # Validate path - CRITICAL: Only allow Accelerator, Standard, or Stop
+    valid_paths = ["Accelerator", "Standard", "Stop"]
+    if path not in valid_paths:
+        print(f"⚠️ Intake: Invalid path '{path}' returned by LLM. Defaulting to 'Standard'.")
+        path = "Standard"
+        reason = f"Path validation failed (received: {analysis.get('path')}). Defaulted to Standard path."
+    else:
+        reason = analysis.get("reason", "Analyzed via Amazon Nova")
+    
     action = analysis.get("action", "Path Categorization Complete")
     remediation = analysis.get("remediation")
     thought_process = analysis.get("thoughtProcess", "Step-by-step analysis carried out.")

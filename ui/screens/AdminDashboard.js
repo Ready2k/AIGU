@@ -119,35 +119,32 @@ const AdminDashboard = ({ userId, onLogout }) => {
     };
 
     const handleDelete = (item) => {
-        Alert.alert(
-            "⚠️ Confirm Deletion",
-            `Are you sure you want to permanently delete "${item.projectMetadata?.name || item.submissionId}"?\n\nThis action cannot be undone.`,
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            const success = await actions.deleteProject(item.submissionId, item.userId);
-                            if (success) {
-                                Alert.alert("✅ Deleted", "Project has been permanently removed.");
-                                // Clear selection if deleted project was selected
-                                if (selectedProject?.submissionId === item.submissionId) {
-                                    setSelectedProject(null);
-                                }
-                                refreshQueue();
-                            } else {
-                                Alert.alert("Error", "Failed to delete project.");
-                            }
-                        } catch (error) {
-                            console.error("Delete failed:", error);
-                            Alert.alert("Error", "Failed to delete project.");
-                        }
-                    }
-                }
-            ]
+        // Use window.confirm for web compatibility instead of Alert.alert
+        const confirmed = window.confirm(
+            `⚠️ Confirm Deletion\n\nAre you sure you want to permanently delete "${item.projectMetadata?.name || item.submissionId}"?\n\nThis action cannot be undone.`
         );
+
+        if (confirmed) {
+            (async () => {
+                try {
+                    console.log(`Attempting to delete project: ${item.submissionId} for user: ${item.userId}`);
+                    const success = await actions.deleteProject(item.submissionId, item.userId);
+                    if (success) {
+                        window.alert("✅ Deleted\n\nProject has been permanently removed.");
+                        // Clear selection if deleted project was selected
+                        if (selectedProject?.submissionId === item.submissionId) {
+                            setSelectedProject(null);
+                        }
+                        refreshQueue();
+                    } else {
+                        window.alert("❌ Error\n\nFailed to delete project.");
+                    }
+                } catch (error) {
+                    console.error("Delete failed:", error);
+                    window.alert("❌ Error\n\nFailed to delete project: " + error.message);
+                }
+            })();
+        }
     };
 
     // Filter queue
