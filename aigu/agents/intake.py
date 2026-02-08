@@ -6,7 +6,7 @@ from aigu.llm import query_nova_json, get_active_prompt
 
 def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     """
-    Intake Orchestrator Node powered by Amazon Nova.
+    Intake Orchestrator Node.
     """
     intake_data = state.get("artifacts", {}).get("intakeData", {})
     description = intake_data.get("description", "")

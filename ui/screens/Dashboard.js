@@ -58,44 +58,121 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
         userId
     );
 
+    const updateActiveSession = (id) => {
+        console.log(`[Dashboard] setActiveSessionId: ${activeSessionId} -> ${id}`);
+        setActiveSessionId(id);
+    };
+
+    const updateSessions = (updater) => {
+        setSessions(prev => {
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            console.log(`[Dashboard] setSessions update. Count ${prev.length} -> ${next.length}. IDs:`, next.map(s => s.submissionId));
+            return next;
+        });
+    };
+
     // Sync liveState to activeState when it changes
     useEffect(() => {
         if (liveState && activeSessionId) {
             setActiveState(liveState);
 
-            // Update the session in the list if the name changed
-            setSessions(prev => prev.map(s =>
-                s.submissionId === activeSessionId ? liveState : s
-            ));
+            const currentId = activeSessionId;
+            const newId = liveState.submissionId;
+
+            // 1. Handle ID Change (Transition from Temp -> Real)
+            const isUpgrade = currentId.startsWith('temp-') && newId && !newId.startsWith('temp');
+
+            if (isUpgrade) {
+                console.log(`[Dashboard] Project Upgrade: ${currentId} -> ${newId}`);
+
+                updateSessions(prev => {
+                    const tempIdLower = currentId.toLowerCase();
+                    const realIdLower = newId.toLowerCase();
+                    const existingReal = prev.find(s => s.submissionId?.toLowerCase() === realIdLower);
+
+                    if (existingReal) {
+                        return prev.filter(s => s.submissionId?.toLowerCase() !== tempIdLower).map(s => {
+                            if (s.submissionId?.toLowerCase() === realIdLower) {
+                                return { ...s, ...liveState, submissionId: newId };
+                            }
+                            return s;
+                        });
+                    } else {
+                        return prev.map(s => {
+                            if (s.submissionId?.toLowerCase() === tempIdLower) {
+                                return { ...s, ...liveState, submissionId: newId };
+                            }
+                            return s;
+                        });
+                    }
+                });
+
+                updateActiveSession(newId);
+            }
+            // 2. Normal Metadata Update
+            else if (newId?.toLowerCase() === currentId?.toLowerCase()) {
+                updateSessions(prev => prev.map(s => {
+                    if (s.submissionId?.toLowerCase() === currentId.toLowerCase()) {
+                        return {
+                            ...s,
+                            ...liveState,
+                            projectMetadata: {
+                                ...(s.projectMetadata || {}),
+                                ...(liveState.projectMetadata || {}),
+                                name: liveState.projectMetadata?.name || s.projectMetadata?.name || s.submissionId
+                            }
+                        };
+                    }
+                    return s;
+                }));
+            }
         }
     }, [liveState, activeSessionId]);
 
     // Load user's sessions on mount
     useEffect(() => {
-        loadSessions();
+        if (userId) loadSessions();
     }, [userId]);
 
     const loadSessions = async () => {
         setLoading(true);
-        const data = await liveActions.fetchSessions(userId);
-        setSessions(data);
+        try {
+            const data = await liveActions.fetchSessions(userId);
 
-        // Auto-select first session if available
-        if (data.length > 0 && !activeSessionId) {
-            loadProjectState(data[0].submissionId);
+            updateSessions(prev => {
+                const newList = [...(data || [])];
+
+                if (activeSessionId) {
+                    const searchId = activeSessionId.toLowerCase();
+                    const isStillThere = newList.some(s => s.submissionId?.toLowerCase() === searchId);
+
+                    if (!isStillThere) {
+                        const activeMatch = prev.find(s => s.submissionId?.toLowerCase() === searchId);
+                        if (activeMatch) {
+                            newList.unshift(activeMatch);
+                        }
+                    }
+                }
+                return newList;
+            });
+
+            if (data && data.length > 0 && !activeSessionId) {
+                loadProjectState(data[0].submissionId);
+            }
+        } catch (err) {
+            console.error("[Dashboard] loadSessions failed", err);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const loadProjectState = async (projectId) => {
-        setActiveSessionId(projectId);
-        // Fetch full state for this project
-        const session = sessions.find(s => s.submissionId === projectId);
+        updateActiveSession(projectId);
+
+        const searchId = projectId.toLowerCase();
+        const session = sessions.find(s => s.submissionId?.toLowerCase() === searchId);
         if (session) {
             setActiveState(session);
-        } else {
-            // If not found in sessions, it might be a new project
-            // The activeState will be set by createNewProject
         }
     };
 
@@ -124,16 +201,17 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
         };
 
         // Add to sessions list
-        setSessions(prev => [newProject, ...prev]);
+        updateSessions(prev => [newProject, ...prev]);
 
         // Set as active
-        setActiveSessionId(tempId);
+        updateActiveSession(tempId);
         setActiveState(newProject);
     };
 
-    const filteredSessions = sessions.filter(s =>
-        s.projectMetadata?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredSessions = sessions.filter(s => {
+        const name = (s.projectMetadata?.name || s.submissionId || '').toLowerCase();
+        return name.includes(searchQuery.toLowerCase());
+    });
 
     const renderMainContent = () => {
         if (!activeState) {
@@ -251,9 +329,14 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
             {/* Left Sidebar - Project Navigation */}
             <View style={[styles.sidebar, { backgroundColor: theme.colors.surface, borderRightColor: theme.colors.border }]}>
                 <View style={styles.sidebarHeader}>
-                    <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, fontSize: 18 }}>
-                        Projects
-                    </Text>
+                    <TouchableOpacity onPress={() => {
+                        setActiveSessionId(null);
+                        setActiveState(null);
+                    }}>
+                        <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, fontSize: 18 }}>
+                            Projects
+                        </Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.newProjectButton, { backgroundColor: theme.colors.primary }]}
                         onPress={createNewProject}
@@ -297,9 +380,9 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                                 <Text style={{
                                     ...theme.typography.body,
                                     color: theme.colors.textPrimary,
-                                    fontWeight: activeSessionId === session.submissionId ? '700' : '500'
+                                    fontWeight: activeSessionId?.toLowerCase() === session.submissionId?.toLowerCase() ? '700' : '500'
                                 }} numberOfLines={1}>
-                                    {session.projectMetadata?.name || session.submissionId}
+                                    {session.projectMetadata?.name || session.submissionId || 'Unnamed Project'}
                                 </Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                                     <View style={[styles.miniStatusDot, {
@@ -347,6 +430,7 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                         <FileManager
                             submissionId={activeSessionId}
                             userId={userId}
+                            actions={liveActions}
                         />
                     </View>
                 )}
@@ -369,6 +453,7 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                 }]}>
                     <SupportAgent
                         state={activeState}
+                        actions={liveActions}
                         onClose={() => setSupportPanelOpen(false)}
                     />
                 </View>

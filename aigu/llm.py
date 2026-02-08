@@ -113,6 +113,18 @@ def invoke_nova(
         })
 
     try:
+        # Wrap generation with LangFuse
+        generation = langfuse.generation(
+            name="Amazon Nova Invoke",
+            model=model_id,
+            model_parameters={
+                "maxTokens": max_tokens,
+                "temperature": temperature
+            },
+            input=messages,
+            metadata=config
+        )
+        
         response = client.converse(
             modelId=model_id,
             messages=formatted_messages,
@@ -123,9 +135,30 @@ def invoke_nova(
             }
         )
         
-        return response["output"]["message"]["content"][0]["text"]
+        output_text = response["output"]["message"]["content"][0]["text"]
+        
+        # End generation trace
+        generation.end(
+            output=output_text,
+            usage={
+                "input": response["usage"]["inputTokens"],
+                "output": response["usage"]["outputTokens"],
+                "total": response["usage"]["totalTokens"]
+            }
+        )
+        
+        return output_text
     except Exception as e:
         print(f"Error invoking Amazon Nova: {e}")
+        
+        # End generation with error if it was started
+        if 'generation' in locals():
+            generation.end(
+                level="ERROR",
+                status_message=str(e),
+                output=str(e)
+            )
+            
         # Fallback to a structured error message that agents can handle
         return json.dumps({
             "error": str(e),

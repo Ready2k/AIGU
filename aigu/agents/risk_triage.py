@@ -6,7 +6,7 @@ from aigu.llm import query_nova_json, get_active_prompt
 
 def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     """
-    Risk & Triage Agent powered by Amazon Nova.
+    Risk & Triage Agent.
     """
     project_metadata = state.get("projectMetadata", {})
     description = state.get("artifacts", {}).get("intakeData", {}).get("description", "")
@@ -60,7 +60,7 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
         "timestamp": timestamp,
         "agent": "Risk & Triage",
         "action": f"Risk set to {risk_level}",
-        "reason": f"SLA set to {sla_days} days powered by Amazon Nova.",
+        "reason": f"SLA set to {sla_days} days.",
         "reasoningContext": s3_uri,
         "userIdentity": get_current_user_identity()
     }

@@ -12,6 +12,12 @@ fi
 
 STACK_NAME_BASE="aigu-governance"
 REGION="us-east-1" # Region for Amazon Bedrock
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text --region ${REGION})
+
+# Ensure build_logic has the latest code
+echo "--- Preparing Deployment Artifacts ---"
+mkdir -p build_logic
+cp -R aigu build_logic/
 
 echo "--- 1. Deploying Persistence Layer (Memory) ---"
 aws cloudformation deploy \
@@ -21,8 +27,14 @@ aws cloudformation deploy \
 
 echo "--- 2. Deploying Logic Layer (Brain) ---"
 # Depends on Persistence Export Values (ImportValue used in template)
-aws cloudformation deploy \
+# Package the local code (artifacts) to S3 first
+aws cloudformation package \
   --template-file infra/aws/cfn-logic.yaml \
+  --s3-bucket aigu-deployment-artifacts-${AWS_ACCOUNT_ID} \
+  --output-template-file infra/aws/cfn-logic-packaged.yaml
+
+aws cloudformation deploy \
+  --template-file infra/aws/cfn-logic-packaged.yaml \
   --stack-name ${STACK_NAME_BASE}-logic \
   --capabilities CAPABILITY_IAM \
   --region ${REGION}

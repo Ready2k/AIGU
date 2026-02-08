@@ -50,7 +50,7 @@ function AppContent() {
                             }]}
                             value={userId}
                             onChangeText={setUserId}
-                            placeholder="e.g. jcregeen or 'admin'"
+                            placeholder="e.g. James or 'admin'"
                             placeholderTextColor={theme.colors.textSecondary}
                         />
                     </View>

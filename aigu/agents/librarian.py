@@ -23,7 +23,7 @@ JSON Structure Required:
 
 def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     """
-    Governance Librarian Agent powered by Amazon Nova.
+    Governance Librarian Agent.
     """
     artifacts = state.get("artifacts", {})
     intake_data = artifacts.get("intakeData", {})

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getCredentials, signRequest } from '../utils/auth';
 
 // Configuration
@@ -16,7 +16,7 @@ export const useAiguState = (submissionId, userId) => {
         const method = options.method || 'GET';
         let headers = { ...options.headers };
 
-        console.log(`signedFetch: ${method} ${url}`);
+        // console.log(`signedFetch: ${method} ${url}`);
 
         if (DEV_MODE) {
             const creds = await getCredentials();
@@ -27,7 +27,7 @@ export const useAiguState = (submissionId, userId) => {
         }
 
         const response = await fetch(url, { ...options, headers });
-        console.log(`signedFetch response: ${response.status} ${response.statusText}`);
+        // console.log(`signedFetch response: ${response.status} ${response.statusText}`);
 
         if (!response.ok) {
             const txt = await response.text();
@@ -39,11 +39,11 @@ export const useAiguState = (submissionId, userId) => {
 
         if (contentType && contentType.includes("application/json")) {
             const json = await response.json();
-            console.log(`signedFetch JSON result:`, json);
+            // console.log(`signedFetch JSON result:`, json);
             return json;
         }
         const text = await response.text();
-        console.log(`signedFetch text result:`, text);
+        // console.log(`signedFetch text result:`, text);
         return text;
     }, []);
 
@@ -90,10 +90,16 @@ export const useAiguState = (submissionId, userId) => {
     // 3. State Subscription
     useEffect(() => {
         let isMounted = true;
+
+        // Reset state when project ID changes to prevent stale syncing
+        setLoading(true);
+        setGlobalState(null);
+        setError(null);
+
         fetchState();
         const intervalId = setInterval(() => {
             if (isMounted) fetchState();
-        }, 5000);
+        }, 10000); // Poll every 10 seconds instead of 5
         return () => {
             isMounted = false;
             clearInterval(intervalId);
@@ -101,7 +107,7 @@ export const useAiguState = (submissionId, userId) => {
     }, [fetchState]);
 
     // 4. Agent Dispatchers
-    const initiateIntake = async (intakeData) => {
+    const initiateIntake = useCallback(async (intakeData) => {
         setLoading(true);
         try {
             const newState = await signedFetch('/invoke', {
@@ -115,9 +121,9 @@ export const useAiguState = (submissionId, userId) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [signedFetch, submissionId, userId]);
 
-    const submitDelta = async (deltaData) => {
+    const submitDelta = useCallback(async (deltaData) => {
         setLoading(true);
         try {
             const newState = await signedFetch('/invoke', {
@@ -131,9 +137,9 @@ export const useAiguState = (submissionId, userId) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [signedFetch, submissionId, userId]);
 
-    const updateConfig = async (configData) => {
+    const updateConfig = useCallback(async (configData) => {
         try {
             await signedFetch('/config', {
                 method: 'POST',
@@ -143,16 +149,16 @@ export const useAiguState = (submissionId, userId) => {
         } catch (err) {
             setError(err);
         }
-    };
+    }, [signedFetch, fetchState]);
 
-    const fetchAdminQueue = async () => {
+    const fetchAdminQueue = useCallback(async () => {
         console.log("Fetching admin queue from /admin/list");
         const result = await signedFetch('/admin/list');
         console.log("Admin queue result:", result);
         return result || [];
-    };
+    }, [signedFetch]);
 
-    const fetchDelta = async (currentId, previousId) => {
+    const fetchDelta = useCallback(async (currentId, previousId) => {
         try {
             console.log(`Fetching delta: ${currentId} vs ${previousId}`);
             const result = await signedFetch(`/delta?currentId=${encodeURIComponent(currentId)}&previousId=${encodeURIComponent(previousId)}`);
@@ -161,18 +167,18 @@ export const useAiguState = (submissionId, userId) => {
             console.error("Delta fetch failed", err);
             return null;
         }
-    };
+    }, [signedFetch]);
 
-    const fetchModels = async () => {
+    const fetchModels = useCallback(async () => {
         try {
             return await signedFetch('/models');
         } catch (err) {
             console.error("Failed to fetch models", err);
             return [];
         }
-    };
+    }, [signedFetch]);
 
-    const fetchSessions = async (targetUserId) => {
+    const fetchSessions = useCallback(async (targetUserId) => {
         try {
             console.log(`Fetching sessions for user: ${targetUserId}`);
             return await signedFetch(`/sessions?userId=${encodeURIComponent(targetUserId)}`);
@@ -180,18 +186,18 @@ export const useAiguState = (submissionId, userId) => {
             console.error("Failed to fetch sessions", err);
             return [];
         }
-    };
+    }, [signedFetch]);
 
-    const fetchConfig = async () => {
+    const fetchConfig = useCallback(async () => {
         try {
             return await signedFetch('/config', { method: 'GET' });
         } catch (err) {
             console.error("Failed to fetch config", err);
             return {};
         }
-    };
+    }, [signedFetch]);
 
-    const adminAction = async (targetSubmissionId, targetUserId, action, message = "") => {
+    const adminAction = useCallback(async (targetSubmissionId, targetUserId, action, message = "") => {
         try {
             console.log("adminAction called:", { targetSubmissionId, targetUserId, action, message });
             const result = await signedFetch('/invoke', {
@@ -210,9 +216,9 @@ export const useAiguState = (submissionId, userId) => {
             console.error("Admin action failed", err);
             return false;
         }
-    };
+    }, [signedFetch]);
 
-    const submitPOC = async (pocData) => {
+    const submitPOC = useCallback(async (pocData) => {
         setLoading(true);
         try {
             const newState = await signedFetch('/invoke', {
@@ -226,9 +232,9 @@ export const useAiguState = (submissionId, userId) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [signedFetch, submissionId, userId]);
 
-    const submitProduction = async (productionData, previousVersionId) => {
+    const submitProduction = useCallback(async (productionData, previousVersionId) => {
         setLoading(true);
         try {
             const newState = await signedFetch('/invoke', {
@@ -247,9 +253,9 @@ export const useAiguState = (submissionId, userId) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [signedFetch, submissionId, userId]);
 
-    const getUploadUrl = async (uploadData) => {
+    const getUploadUrl = useCallback(async (uploadData) => {
         try {
             console.log(`Getting upload URL for: ${uploadData.fileName}`);
             const result = await signedFetch('/upload', {
@@ -262,9 +268,9 @@ export const useAiguState = (submissionId, userId) => {
             console.error("Failed to get upload URL", err);
             throw err;
         }
-    };
+    }, [signedFetch]);
 
-    const listFiles = async (submissionId) => {
+    const listFiles = useCallback(async (submissionId) => {
         try {
             console.log(`Listing files for submission: ${submissionId}`);
             const result = await signedFetch(`/files?submissionId=${encodeURIComponent(submissionId)}&userId=${encodeURIComponent(userId)}`);
@@ -273,9 +279,9 @@ export const useAiguState = (submissionId, userId) => {
             console.error("Failed to list files", err);
             return [];
         }
-    };
+    }, [signedFetch, userId]);
 
-    const askSupportAgent = async (requestData) => {
+    const askSupportAgent = useCallback(async (requestData) => {
         try {
             console.log(`Asking support agent: ${requestData.message.substring(0, 50)}...`);
             const result = await signedFetch('/support/ask', {
@@ -288,9 +294,9 @@ export const useAiguState = (submissionId, userId) => {
             console.error("Support agent request failed", err);
             throw err;
         }
-    };
+    }, [signedFetch]);
 
-    const fetchPrompts = async () => {
+    const fetchPrompts = useCallback(async () => {
         console.log("Fetching prompts from /admin/prompts");
         try {
             const result = await signedFetch('/admin/prompts');
@@ -299,9 +305,9 @@ export const useAiguState = (submissionId, userId) => {
             console.error("Failed to fetch prompts", err);
             return [];
         }
-    };
+    }, [signedFetch]);
 
-    const updatePrompt = async (name, content, tags = ['production']) => {
+    const updatePrompt = useCallback(async (name, content, tags = ['production']) => {
         try {
             console.log(`Updating prompt: ${name}`);
             const result = await signedFetch('/admin/prompts', {
@@ -314,9 +320,9 @@ export const useAiguState = (submissionId, userId) => {
             console.error("Failed to update prompt", err);
             throw err;
         }
-    };
+    }, [signedFetch]);
 
-    const deleteProject = async (targetSubmissionId, targetUserId) => {
+    const deleteProject = useCallback(async (targetSubmissionId, targetUserId) => {
         try {
             console.log(`Deleting project: ${targetSubmissionId} for user: ${targetUserId}`);
             await signedFetch(`/state?submissionId=${encodeURIComponent(targetSubmissionId)}&userId=${encodeURIComponent(targetUserId)}`, {
@@ -328,7 +334,7 @@ export const useAiguState = (submissionId, userId) => {
             console.error("Delete project failed", err);
             return false;
         }
-    };
+    }, [signedFetch]);
 
     const governance = globalState?.governance || {};
     const status = governance.status;
@@ -347,7 +353,7 @@ export const useAiguState = (submissionId, userId) => {
         state: globalState,
         loading,
         error,
-        actions: {
+        actions: useMemo(() => ({
             initiateIntake,
             submitPOC,
             submitProduction,
@@ -364,11 +370,10 @@ export const useAiguState = (submissionId, userId) => {
             deleteProject,
             getUploadUrl,
             listFiles,
-            listFiles,
             askSupportAgent,
             fetchPrompts,
             updatePrompt
-        },
+        }), [initiateIntake, submitPOC, submitProduction, submitDelta, updateConfig, fetchState, fetchReasoning, fetchAdminQueue, fetchDelta, fetchModels, fetchSessions, fetchConfig, adminAction, deleteProject, getUploadUrl, listFiles, askSupportAgent, fetchPrompts, updatePrompt]),
         computed: {
             isBlocked,
             isInReview,

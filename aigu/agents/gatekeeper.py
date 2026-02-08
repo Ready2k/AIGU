@@ -6,7 +6,7 @@ from aigu.llm import query_nova_json, get_active_prompt
 
 def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
     """
-    Gatekeeper Agent powered by Amazon Nova.
+    Gatekeeper Agent.
     """
     project_metadata = state.get("projectMetadata", {})
     risk_level = project_metadata.get("riskLevel", "Low")

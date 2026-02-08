@@ -12,9 +12,13 @@ import { useAiguState } from '../hooks/useAiguState';
  * - Pre-signed URL viewing
  * - Support for PDFs, Images, and Diagrams
  */
-const FileManager = ({ submissionId, userId }) => {
+const FileManager = ({ submissionId, userId, actions: providedActions }) => {
     const { theme } = useAiguTheme();
-    const { actions } = useAiguState(submissionId, userId);
+
+    // Use provided actions if available, otherwise spawn new hook (fallback)
+    const hookState = useAiguState(submissionId, userId);
+    const actions = providedActions || hookState.actions;
+
     const [files, setFiles] = useState([]);
     const [uploading, setUploading] = useState(false);
     const [dragActive, setDragActive] = useState(false);
@@ -71,7 +75,8 @@ const FileManager = ({ submissionId, userId }) => {
                 const uploadData = await actions.getUploadUrl({
                     fileName: file.name,
                     fileType: file.type,
-                    submissionId: submissionId
+                    submissionId: submissionId,
+                    userId: userId
                 });
 
                 // 2. Upload directly to S3
@@ -123,7 +128,7 @@ const FileManager = ({ submissionId, userId }) => {
     };
 
     // Delete file
-    const deleteFile = async (fileId) => {
+    const deleteFile = async (fileKey) => {
         Alert.alert(
             'Confirm Delete',
             'Are you sure you want to delete this file?',
@@ -134,7 +139,7 @@ const FileManager = ({ submissionId, userId }) => {
                     style: 'destructive',
                     onPress: () => {
                         // TODO: Delete from S3 and DynamoDB
-                        setFiles(prev => prev.filter(f => f.id !== fileId));
+                        setFiles(prev => prev.filter(f => f.key !== fileKey));
                     }
                 }
             ]
@@ -207,7 +212,7 @@ const FileManager = ({ submissionId, userId }) => {
                 <ScrollView horizontal style={styles.gallery}>
                     {files.map((file) => (
                         <View
-                            key={file.id}
+                            key={file.key}
                             style={[styles.fileCard, {
                                 backgroundColor: theme.colors.surface,
                                 borderColor: theme.colors.border
@@ -241,7 +246,7 @@ const FileManager = ({ submissionId, userId }) => {
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={[styles.actionButton, { backgroundColor: theme.colors.error }]}
-                                    onPress={() => deleteFile(file.id)}
+                                    onPress={() => deleteFile(file.key)}
                                 >
                                     <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>DELETE</Text>
                                 </TouchableOpacity>

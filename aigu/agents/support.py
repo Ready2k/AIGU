@@ -34,7 +34,7 @@ def generate_presigned_url(s3_uri: str, expiration=3600) -> str:
 
 def support_agent(state: GlobalState) -> Dict[str, Any]:
     """
-    Support & Insights Agent Node powered by Amazon Nova.
+    Support & Insights Agent Node.
     Provides transparent feedback and secure access to audit reasoning.
     """
     # Read-Only Access

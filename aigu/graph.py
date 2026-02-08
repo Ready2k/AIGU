@@ -114,24 +114,8 @@ def build_aigu_graph():
     workflow.add_edge("pilot", "risk_triage")
     
     # Standard path: Risk → Handover (auto-approve)
-    # Accelerator path: Risk → Librarian → Gatekeeper
-    def route_risk(state: GlobalState) -> Literal["librarian", "handover"]:
-        """
-        Route from risk triage based on path.
-        
-        - Standard path → Handover (auto-approve)
-        - Accelerator path → Librarian (requires review)
-        """
-        path = state.get("projectMetadata", {}).get("path", "Standard")
-        
-        if path == "Standard":
-            print("  → Standard path: Auto-approve → Handover")
-            return "handover"
-        else:
-            print("  → Accelerator path: Routing to Librarian")
-            return "librarian"
-    
-    workflow.add_conditional_edges("risk_triage", route_risk)
+    # Risk -> Librarian (ALL paths must pass through Librarian & Gatekeeper)
+    workflow.add_edge("risk_triage", "librarian")
     
     # Librarian → Gatekeeper
     workflow.add_edge("librarian", "gatekeeper")

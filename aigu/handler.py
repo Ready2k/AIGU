@@ -61,7 +61,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # 4.1 Normalize Payload for LangGraph State
             metadata = {
                 "langfuse_session_id": submission_id,
-                "langfuse_user_id": user_id
+                "langfuse_user_id": user_id,
+                "sessionId": submission_id  # Crucial for grouping in LangFuse UI
             }
             agent = payload.get("agent")
             inner_payload = payload.get("payload", {})
@@ -196,6 +197,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if hasattr(langfuse_handler, "client"):
                 langfuse_handler.client.flush()
             
+            # Flush global client for manual generations in LLM utils
+            try:
+                from aigu.llm import get_langfuse_client as get_global_lc
+                global_lc = get_global_lc()
+                if global_lc:
+                    global_lc.flush()
+            except Exception as e:
+                print(f"Warning: Failed to flush global Langfuse client: {e}")
+            
             # Enrich with fresh pre-signed URLs
             enriched_result = enrich_state_with_presigned_urls(result)
             
@@ -243,6 +253,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 )
                 
                 print(f"Generated pre-signed POST for: {s3_key}")
+                print(f"DEBUG UPLOAD: userId={user_id}, submissionId={submission_id_for_file}, key={s3_key}")
                 
                 # [CRITICAL 'Sight' FIX]: Connect S3 Uploads to Global State
                 # Immediately register the file in the artifacts list so the Librarian can see it.
@@ -303,9 +314,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             try:
                 # List objects in S3 using standardized path: uploads/{userId}/{submissionId}/
+                # Ensure userId is handled if missing (consistent with upload logic)
+                list_user_id = user_id if user_id and user_id != 'null' else "anonymous"
+                prefix = f"uploads/{list_user_id}/{submission_id}/"
+                print(f"DEBUG LIST FILES: userId={user_id} -> {list_user_id}, submissionId={submission_id}, prefix={prefix}")
+                
                 response = s3_client.list_objects_v2(
                     Bucket=bucket_name,
-                    Prefix=f"uploads/{user_id}/{submission_id}/"
+                    Prefix=prefix
                 )
                 
                 files = []

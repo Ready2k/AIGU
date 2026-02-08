@@ -14,9 +14,12 @@ import { useAiguState } from '../hooks/useAiguState';
  * - Provides actionable checklists
  */
 
-const SupportAgent = ({ state, onClose }) => {
+const SupportAgent = ({ state, onClose, actions: providedActions }) => {
     const { theme } = useAiguTheme();
-    const { actions } = useAiguState(state?.submissionId || 'temp', state?.userId || 'anonymous');
+
+    // Use provided actions if available, fallback to new hook
+    const hookState = useAiguState(state?.submissionId || 'temp', state?.userId || 'anonymous');
+    const actions = providedActions || hookState.actions;
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
