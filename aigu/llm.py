@@ -90,17 +90,19 @@ def invoke_nova(
             print(f"Warning: Could not compile prompt with state: {e}")
             # Fall back to raw prompt
     
-    # Extract config from LangFuse (with fallbacks)
+    # Extract config from LangFuse (with robust fallbacks)
     config = {}
     if hasattr(prompt_object, 'config') and prompt_object.config:
         config = prompt_object.config
     
-    model_id = config.get("model", get_model_id())
-    parameters = config.get("parameters", {})
-    temperature = parameters.get("temperature", 0.0)
-    max_tokens = parameters.get("max_tokens", 2000)
+    # User Request: Provide safe fallbacks for all config values
+    model_id = config.get("model") or get_model_id() or "amazon.nova-lite-v1:0"
+    parameters = config.get("parameters") or {}
+    temperature = parameters.get("temperature", 0.3)  # Default for governance
+    max_tokens = parameters.get("max_tokens", 500)   # Safe default for structured responses
     
-    print(f"LLM: Using model={model_id}, temp={temperature}, max_tokens={max_tokens}")
+    # Print only if debug is enabled or briefly
+    print(f"LLM: Invoke {model_id} (T={temperature}, M={max_tokens})")
     
     # Format messages for Converse API
     formatted_messages = []

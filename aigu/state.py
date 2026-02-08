@@ -62,6 +62,7 @@ class Artifacts(TypedDict, total=False):
     pilotData: Optional[PilotData]
     productionData: Optional[ProductionData]
     handoverData: Optional[HandoverData]
+    files: Optional[List[str]]  # Track S3 filenames
 
 class Governance(TypedDict, total=False):
     status: str  # Draft, In-Review, Blocked, Approved, POC-Approved, Pilot-Active, Production-Ready, Live

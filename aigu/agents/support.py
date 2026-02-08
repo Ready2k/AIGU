@@ -41,49 +41,90 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
     project_metadata = state.get("projectMetadata", {})
     governance = state.get("governance", {})
     audit_log = state.get("auditLog", [])
+    artifacts = state.get("artifacts", {})
     
-    # 1. Invoke Amazon Nova for Personalized Status Synthesis
-    print(f"Support: Invoking Amazon Nova for status summary.")
+    # 1. Extract Comprehensive Context for Nova
+    print(f"Support: Extracting comprehensive state context for personalized guidance.")
     
-    # Construct context for Nova
+    # Basic status
     status = governance.get("status", "Unknown")
     stage = project_metadata.get("currentStage", "Intake")
     blockers = governance.get('blockers', [])
-    missing_artifacts = [b.split(": Missing ")[1] for b in blockers if ": Missing " in b]
     
+    # Extract missing artifacts from projectMetadata (set by Librarian)
+    missing_artifacts_list = project_metadata.get('missingArtifacts', [])
+    
+    # Extract risk reasoning from audit log (from Risk & Triage agent)
+    risk_level = project_metadata.get('riskLevel', '')
+    risk_reasoning = "No specific reasoning recorded."
+    for entry in audit_log:
+        if entry.get('agent') == 'Risk & Triage':
+            # Extract reasoning from the reasoningContext or reason field
+            risk_reasoning = entry.get('reason', risk_reasoning)
+            break
+    
+    # Extract technical approach details from artifacts
+    tech_design = artifacts.get('technicalDesign', {})
+    technical_approach = ""
+    if tech_design:
+        # Build a summary of key technical details
+        tech_parts = []
+        if tech_design.get('securityMeasures'):
+            tech_parts.append(f"Security: {tech_design.get('securityMeasures')}")
+        if tech_design.get('architecture'):
+            tech_parts.append(f"Architecture: {tech_design.get('architecture')}")
+        if tech_design.get('dataFlow'):
+            tech_parts.append(f"Data Flow: {tech_design.get('dataFlow')}")
+        technical_approach = "; ".join(tech_parts) if tech_parts else "Not yet specified"
+    else:
+        technical_approach = "Not yet specified"
+    
+    # Format lists for prompt
+    blockers_str = ", ".join(blockers) if blockers else "None"
+    missing_artifacts_str = ", ".join(missing_artifacts_list) if missing_artifacts_list else ""
+    
+    # Construct context string for fallback
     context_str = f"""
     Current Status: {status}
     Current Stage: {stage}
-    Risk Level: {project_metadata.get('riskLevel', 'Low')}
+    Risk Level: {risk_level}
+    Risk Reasoning: {risk_reasoning}
     SLA Deadline: {governance.get('slaDeadline', 'TBD')}
-    Blockers: {blockers}
-    Missing Artifacts Checklist: {missing_artifacts}
+    Blockers: {blockers_str}
+    Missing Artifacts: {missing_artifacts_str}
+    Technical Approach: {technical_approach}
     Path: {project_metadata.get('path', 'Standard')}
     """
     
+    # 2. Invoke Amazon Nova for Personalized Status Synthesis
+    print(f"Support: Invoking Amazon Nova for status summary.")
+    
     try:
         prompt_tmpl = get_active_prompt("support-agent", tag="production")
-        system_prompt = prompt_tmpl.compile(
-            status=status,
-            stage=stage,
-            risk_level=project_metadata.get('riskLevel', 'Low'),
-            sla_deadline=governance.get('slaDeadline', 'TBD'),
-            blockers=blockers,
-            missing_artifacts=missing_artifacts,
-            path=project_metadata.get('path', 'Standard')
-        )
-    except Exception as e:
-        print(f"Error loading prompt 'support-agent': {e}")
-        system_prompt = "You are a professional GIGC Assistant. Help user navigate governance."
-
-    try:
+        
+        # Build state dict for prompt variable substitution
+        prompt_state = {
+            'projectName': project_metadata.get('name', 'Unknown'),
+            'status': status,
+            'stage': stage,
+            'riskLevel': risk_level,
+            'riskReasoning': risk_reasoning,
+            'slaDeadline': governance.get('slaDeadline', 'TBD'),
+            'blockers': blockers_str,
+            'missingArtifacts': missing_artifacts_str,
+            'technicalApproach': technical_approach,
+            'path': project_metadata.get('path', 'Standard')
+        }
+        
         message = invoke_nova(
-            system_prompt=system_prompt,
-            messages=[{"role": "user", "content": f"State Summary:\n{context_str}"}]
+            prompt_object=prompt_tmpl,
+            messages=[{"role": "user", "content": f"State Summary:\n{context_str}"}],
+            state=prompt_state
         ).strip()
     except Exception as e:
         print(f"Nova invocation failed for support: {e}")
         message = f"Your project is currently {status} in the {stage} phase."
+
 
 
     # 3. Secure Reasoning Access (Hydrate Audit Log for Viewer)

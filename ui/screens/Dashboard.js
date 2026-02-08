@@ -214,17 +214,22 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
 
                     <WorkflowProgress state={activeState} />
 
-                    {activeState.governance?.blockers?.length > 0 && (
+                    {(activeState.governance?.blockers?.length > 0 || activeState.projectMetadata?.missingArtifacts?.length > 0) && (
                         <View style={[styles.alertBox, {
                             backgroundColor: theme.mode === 'dark' ? '#321c1c' : '#FFEBEB',
                             borderLeftColor: theme.colors.error
                         }]}>
                             <Text style={{ ...theme.typography.subheader, color: theme.colors.error, marginBottom: 8 }}>
-                                ⚠️ Blockers Detected
+                                ⚠️ Blockers & Missing Items
                             </Text>
-                            {activeState.governance.blockers.map((b, i) => (
-                                <Text key={i} style={{ ...theme.typography.body, color: theme.colors.textPrimary, marginVertical: 2 }}>
+                            {activeState.governance?.blockers?.map((b, i) => (
+                                <Text key={`blocker-${i}`} style={{ ...theme.typography.body, color: theme.colors.textPrimary, marginVertical: 2 }}>
                                     • {b}
+                                </Text>
+                            ))}
+                            {activeState.projectMetadata?.missingArtifacts?.map((m, i) => (
+                                <Text key={`missing-${i}`} style={{ ...theme.typography.body, color: theme.colors.textSecondary, marginVertical: 2, fontWeight: '600' }}>
+                                    • MISSING ARTIFACT: {m.replace(/([A-Z])/g, ' $1').trim()}
                                 </Text>
                             ))}
                         </View>

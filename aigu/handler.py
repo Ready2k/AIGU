@@ -72,11 +72,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 dynamodb = boto3.resource('dynamodb')
                 state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
                 
-                project_id = submission_id
+                # Standardize ID naming: submissionId is the source of truth
+                submission_id_val = submission_id
                 # Ensure userId is a string for DynamoDB sort key
                 effective_userId = user_id if user_id and user_id != 'null' else "anonymous"
                 
-                print(f"Attempting to persist initial state for project: {project_id}")
+                print(f"Attempting to persist initial state for project: {submission_id_val}")
                 state_table.put_item(Item={
                     "submissionId": submission_id,
                     "userId": effective_userId,
@@ -224,7 +225,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
             
             # Generate unique S3 key
-            s3_key = f"submissions/{submission_id_for_file}/{file_name}"
+            # Generate unique S3 key
+            # Standardized path: uploads/{userId}/{submissionId}/{filename}
+            s3_key = f"uploads/{user_id}/{submission_id_for_file}/{file_name}"
             
             try:
                 # Generate pre-signed POST URL
@@ -240,6 +243,33 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 )
                 
                 print(f"Generated pre-signed POST for: {s3_key}")
+                
+                # [CRITICAL 'Sight' FIX]: Connect S3 Uploads to Global State
+                # Immediately register the file in the artifacts list so the Librarian can see it.
+                try:
+                    dynamodb = boto3.resource('dynamodb')
+                    state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+                    
+                    # Ensure effective userId logic matches other handlers
+                    upload_user_id = user_id if user_id and user_id != 'null' else "anonymous"
+                    
+                    print(f"Registering file {file_name} in Global State for {submission_id_for_file}")
+                    state_table.update_item(
+                        Key={
+                            "submissionId": submission_id_for_file, 
+                            "userId": upload_user_id
+                        },
+                        UpdateExpression="SET artifacts.files = list_append(if_not_exists(artifacts.files, :empty_list), :file_data)",
+                        ExpressionAttributeValues={
+                            ":file_data": [file_name],
+                            ":empty_list": []
+                        },
+                        ReturnValues="UPDATED_NEW"
+                    )
+                except Exception as state_err:
+                    print(f"Warning: Failed to update state for upload {file_name}: {state_err}")
+                    # Non-blocking, continue to return URL
+
                 return {
                     "statusCode": 200,
                     "headers": headers,
@@ -272,10 +302,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
             
             try:
-                # List objects in S3
+                # List objects in S3 using standardized path: uploads/{userId}/{submissionId}/
                 response = s3_client.list_objects_v2(
                     Bucket=bucket_name,
-                    Prefix=f"submissions/{submission_id}/"
+                    Prefix=f"uploads/{user_id}/{submission_id}/"
                 )
                 
                 files = []
