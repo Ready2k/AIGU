@@ -5,6 +5,7 @@ import { useAiguState } from '../hooks/useAiguState';
 import WorkflowProgress from '../components/WorkflowProgress';
 import SupportAgent from '../components/SupportAgent';
 import PromptManager from '../components/PromptManager';
+import FileManager from '../components/FileManager';
 
 /**
  * AdminDashboard Component - Desktop-Optimized Admin Interface
@@ -276,6 +277,18 @@ const AdminDashboard = ({ userId, onLogout }) => {
                         Workflow Progress
                     </Text>
                     <WorkflowProgress state={selectedProject} />
+                </View>
+
+                {/* Attachments */}
+                <View style={{ marginTop: 24, paddingBottom: 40 }}>
+                    <Text style={{ ...theme.typography.subheader, color: theme.colors.textPrimary, marginBottom: 12 }}>
+                        📎 Project Attachments
+                    </Text>
+                    <FileManager
+                        submissionId={selectedProject.submissionId}
+                        userId={selectedProject.userId}
+                        actions={actions}
+                    />
                 </View>
             </ScrollView>
         );

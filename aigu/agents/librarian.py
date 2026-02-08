@@ -33,10 +33,12 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     submission_id = state.get("submissionId", "unknown")
     
     # 1. Invoke Amazon Nova for Intelligent Consolidation
-    print(f"Librarian: Invoking Amazon Nova for artifact consolidation.")
+    files = artifacts.get("files", [])
+    print(f"Librarian: Invoking Amazon Nova for artifact consolidation. (Files uploaded: {files})")
+    
     analysis = query_nova_json(
         prompt_name="librarian_agent",  # Use LangFuse prompt (correct name)
-        user_prompt=f"Risk Level: {risk_level}\nIntake Data: {intake_data}\nExisting technicalDesign: {tech_design}",
+        user_prompt=f"Risk Level: {risk_level}\nIntake Data: {intake_data}\nExisting technicalDesign: {tech_design}\nUploaded File Attachments: {files}",
         expected_keys=["updatedTechnicalDesign", "actionsTaken", "thoughtProcess", "missingSections"],
         state=state  # Pass full state for variable substitution
     )

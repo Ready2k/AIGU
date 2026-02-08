@@ -235,9 +235,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
             
             # Generate unique S3 key
-            # Generate unique S3 key
             # Standardized path: uploads/{userId}/{submissionId}/{filename}
-            s3_key = f"uploads/{user_id}/{submission_id_for_file}/{file_name}"
+            upload_user_id = user_id if user_id and user_id != 'null' else "anonymous"
+            s3_key = f"uploads/{upload_user_id}/{submission_id_for_file}/{file_name}"
             
             try:
                 # Generate pre-signed POST URL
@@ -333,9 +333,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         ExpiresIn=3600
                     )
                     
+                    file_name = obj['Key'].split('/')[-1]
+                    file_type = "application/octet-stream"
+                    if file_name.lower().endswith('.pdf'): file_type = "application/pdf"
+                    elif file_name.lower().endswith(('.png', '.jpg', '.jpeg')): file_type = "image/auto"
+                    
                     files.append({
                         "key": obj['Key'],
-                        "name": obj['Key'].split('/')[-1],
+                        "name": file_name,
+                        "type": file_type,
                         "size": obj['Size'],
                         "uploadedAt": obj['LastModified'].isoformat(),
                         "presignedUrl": presigned_url

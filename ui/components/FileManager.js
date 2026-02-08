@@ -178,6 +178,13 @@ const FileManager = ({ submissionId, userId, actions: providedActions }) => {
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
             >
+                <TouchableOpacity
+                    onPress={loadFiles}
+                    style={{ position: 'absolute', top: 10, right: 10, padding: 5, zIndex: 10 }}
+                >
+                    <Text style={{ fontSize: 16 }}>↻</Text>
+                </TouchableOpacity>
+
                 {uploading ? (
                     <ActivityIndicator size="large" color={theme.colors.primary} />
                 ) : (
