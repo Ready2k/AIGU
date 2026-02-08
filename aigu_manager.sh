@@ -15,7 +15,7 @@ deploy() {
   
   # Load .env variables
   if [ -f .env ]; then
-    export $(cat .env | xargs)
+    export $(grep -v '^#' .env | xargs)
   fi
 
   # 1. Get Artifact Bucket

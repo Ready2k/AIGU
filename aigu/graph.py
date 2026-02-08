@@ -113,36 +113,31 @@ def build_aigu_graph():
     # Pilot always goes to risk triage for SLA assignment
     workflow.add_edge("pilot", "risk_triage")
     
-    # Standard path: Risk → Handover (auto-approve)
-    # Risk -> Librarian (ALL paths must pass through Librarian & Gatekeeper)
+    # ✅ MANDATORY GOVERNANCE LOOP
+    # All paths MUST pass through Librarian and Gatekeeper
     workflow.add_edge("risk_triage", "librarian")
-    
-    # Librarian → Gatekeeper
     workflow.add_edge("librarian", "gatekeeper")
     
     # Route from gatekeeper based on approval and stage
     def route_gatekeeper(state: GlobalState) -> Literal["production", "handover", "support"]:
         """
-        Route from gatekeeper based on approval status and current stage.
-        
-        - Approved + Pilot stage → Production
-        - Approved + Production stage → Handover
-        - Rejected/Blocked → Support
+        Gatekeeper is the final decision point for Handover or Production.
         """
         status = state.get("governance", {}).get("status", "Draft")
         current_stage = state.get("projectMetadata", {}).get("currentStage", "Pilot")
         admin_action = state.get("governance", {}).get("adminAction")
         
-        # Check for admin approval
+        # Enforce formal approval
         if status == "Approved" or admin_action == "ADMIN_APPROVE":
-            if current_stage == "Pilot" or current_stage == "Pilot-Complete":
-                print("  → Pilot approved: Routing to Production")
+            # Support multi-stage lifecycle: Pilot -> Production -> Handover
+            if current_stage in ["Pilot", "Pilot-Complete"]:
+                print("  → Approved: Proceeding to Production")
                 return "production"
             else:
-                print("  → Production approved: Routing to Handover")
+                print("  → Approved: Proceeding to Handover")
                 return "handover"
         else:
-            print(f"  → Not approved (status: {status}): Routing to Support")
+            print(f"  → Not Approved (status: {status}): Routing to Support")
             return "support"
     
     workflow.add_conditional_edges("gatekeeper", route_gatekeeper)
