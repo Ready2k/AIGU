@@ -28,29 +28,37 @@ const SupportAgent = ({ state, onClose, actions: providedActions }) => {
     // Initialize with context-aware greeting
     useEffect(() => {
         if (state && messages.length === 0) {
-            const stage = state.projectMetadata?.currentStage || 'Intake';
-            const status = state.governance?.status || 'Draft';
-            const blockers = state.governance?.blockers || [];
-            const missingArtifacts = blockers
-                .filter(b => b.includes(': Missing '))
-                .map(b => b.split(': Missing ')[1]);
+            let greeting = '';
 
-            let greeting = `👋 Hello! I'm your GIGC Assistant.\n\n`;
-            greeting += `**Current Status:** ${status}\n`;
-            greeting += `**Stage:** ${stage}\n\n`;
-
-            if (missingArtifacts.length > 0) {
-                greeting += `I noticed you need the following items:\n`;
-                missingArtifacts.forEach(artifact => {
-                    greeting += `• ${artifact}\n`;
-                });
-                greeting += `\nWould you like guidance on any of these?`;
-            } else if (status === 'In-Review') {
-                greeting += `Your project is currently under review. The GIGC team will respond within the SLA timeframe.`;
-            } else if (status === 'Approved') {
-                greeting += `Congratulations! Your project has been approved. You can proceed to the next phase.`;
+            // If the backend LLM has provided a specific support message, use it
+            if (state.ui_overlay?.supportMessage) {
+                greeting = state.ui_overlay.supportMessage;
             } else {
-                greeting += `How can I help you with your governance submission today?`;
+                // Fallback to local synthesis if backend message is missing
+                const stage = state.projectMetadata?.currentStage || 'Intake';
+                const status = state.governance?.status || 'Draft';
+                const blockers = state.governance?.blockers || [];
+                const missingArtifacts = blockers
+                    .filter(b => b.includes(': Missing '))
+                    .map(b => b.split(': Missing ')[1]);
+
+                greeting = `👋 Hello! I'm your GIGC Assistant.\n\n`;
+                greeting += `**Current Status:** ${status}\n`;
+                greeting += `**Stage:** ${stage}\n\n`;
+
+                if (missingArtifacts.length > 0) {
+                    greeting += `I noticed you need the following items:\n`;
+                    missingArtifacts.forEach(artifact => {
+                        greeting += `• ${artifact}\n`;
+                    });
+                    greeting += `\nWould you like guidance on any of these?`;
+                } else if (status === 'In-Review') {
+                    greeting += `Your project is currently under review. The GIGC team will respond within the SLA timeframe.`;
+                } else if (status === 'Approved') {
+                    greeting += `Congratulations! Your project has been approved. You can proceed to the next phase.`;
+                } else {
+                    greeting += `How can I help you with your governance submission today?`;
+                }
             }
 
             setMessages([{
@@ -60,7 +68,7 @@ const SupportAgent = ({ state, onClose, actions: providedActions }) => {
                 timestamp: new Date().toISOString()
             }]);
         }
-    }, [state]);
+    }, [state, messages.length]);
 
     const sendMessage = async () => {
         if (!input.trim()) return;
@@ -119,6 +127,11 @@ const SupportAgent = ({ state, onClose, actions: providedActions }) => {
     useEffect(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
     }, [messages]);
+
+    // Clear messages when project changes
+    useEffect(() => {
+        setMessages([]);
+    }, [state?.submissionId]);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.surface }]}>

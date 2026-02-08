@@ -93,6 +93,18 @@ const SupportStatus = ({ state, onViewLog, refresh, onRemediate }) => {
                         </View>
                     )}
 
+                    {/* Assistant Guidance section */}
+                    {!!state.ui_overlay?.supportMessage && (
+                        <View style={[styles.guidanceBox, { backgroundColor: theme.mode === 'dark' ? '#1c2532' : '#EBF5FF', borderLeftColor: theme.colors.primary }]}>
+                            <Text style={{ ...theme.typography.subheader, color: theme.colors.primary, marginBottom: 8 }}>
+                                🧠 Assistant Guidance
+                            </Text>
+                            <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, lineHeight: 20 }}>
+                                {state.ui_overlay.supportMessage}
+                            </Text>
+                        </View>
+                    )}
+
                     <View style={styles.footer}>
                         <TouchableOpacity
                             style={[styles.auditButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
@@ -152,6 +164,18 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         borderLeftWidth: 4,
         marginTop: 24,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 1
+    },
+    guidanceBox: {
+        padding: 20,
+        borderRadius: 8,
+        borderLeftWidth: 4,
+        marginTop: 8,
         marginBottom: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },

@@ -193,6 +193,25 @@ const AdminDashboard = ({ userId, onLogout }) => {
                     {selectedProject.submissionId}
                 </Text>
 
+                {/* Agent Reasoning */}
+                {!!selectedProject.ui_overlay?.supportMessage && (
+                    <View style={{
+                        padding: 16,
+                        backgroundColor: 'rgba(255, 165, 0, 0.1)',
+                        borderRadius: 8,
+                        borderLeftWidth: 4,
+                        borderLeftColor: theme.colors.warning,
+                        marginBottom: 24
+                    }}>
+                        <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '700', marginBottom: 8 }}>
+                            🧠 AGENT REASONING & GUIDANCE
+                        </Text>
+                        <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, lineHeight: 20 }}>
+                            {selectedProject.ui_overlay.supportMessage}
+                        </Text>
+                    </View>
+                )}
+
                 {/* Quick Actions */}
                 <View style={styles.actionSection}>
                     <Text style={{ ...theme.typography.subheader, color: theme.colors.textPrimary, marginBottom: 12 }}>
