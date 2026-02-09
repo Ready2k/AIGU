@@ -252,6 +252,8 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                     isRemediation={isRemediating}
                     initialData={activeState.artifacts?.intakeData || {}}
                     setRemediating={setIsRemediating}
+                    projectMetadata={activeState.projectMetadata || {}}
+                    governance={activeState.governance || {}}
                 />
             );
         }

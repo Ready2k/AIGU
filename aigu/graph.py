@@ -47,21 +47,20 @@ def build_aigu_graph():
     # Route from intake based on path
     def route_intake(state: GlobalState) -> Literal["poc", "pilot", "production", "risk_triage", "support"]:
         """
-        Route from intake based on project path and current stage.
-        
-        - Stop → Support (project rejected)
-        - Standard Path → Risk Triage (auto-approve)
-        - Accelerator Path:
-            - Intake Stage → POC
-            - Pilot Stage → Pilot
-            - Production Stage → Production
+        Intake Router: Enforces data completeness before allowing progress.
         """
         metadata = state.get("projectMetadata", {})
         path = metadata.get("path", "Stop")
         stage = metadata.get("currentStage", "Intake")
+        is_complete = metadata.get("isIntakeComplete", False)
         
         if path == "Stop":
             print("  → Routing to Support (project stopped)")
+            return "support"
+        
+        # 1. Enforce Intake Completeness (Critical Fields)
+        if not is_complete:
+            print("  → Intake incomplete: Routing to Support for user guidance")
             return "support"
         
         if path == "Standard":
@@ -70,13 +69,10 @@ def build_aigu_graph():
         
         # Accelerator Path - Stage Based Routing
         if stage == "Production":
-            print("  → Routing to Production (resubmission)")
             return "production"
         elif stage == "Pilot" or stage == "Pilot-Complete":
-            print("  → Routing to Pilot (resubmission)")
             return "pilot"
         else:
-            print("  → Routing to POC (accelerator path)")
             return "poc"
     
     workflow.add_conditional_edges("intake", route_intake)

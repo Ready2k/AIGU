@@ -5,6 +5,11 @@ class ProjectMetadata(TypedDict, total=False):
     riskLevel: Optional[str]  # Low, Med, High
     path: Optional[str]  # Accelerator, Standard, Stop
     currentStage: str  # Intake, Design, POC, Pilot, Risk, Librarian, Gatekeeper, Production, Handover
+    artifactsValid: bool
+    missingArtifacts: List[str]
+    missingIntakeFields: List[str]  # NEW: Track specific missing fields in intake
+    validationErrors: List[str]    # NEW: Specific validation failures
+    isIntakeComplete: bool         # NEW: Whether all critical fields are present
     
     # NEW FIELDS for multi-stage lifecycle
     capabilityType: Optional[str]  # Hero, New
@@ -45,6 +50,58 @@ class HandoverTask(TypedDict, total=False):
     status: str
     dueDate: str
 
+class IntakeData(TypedDict, total=False):
+    projectName: str
+    owner: str
+    businessArea: str
+    problemStatement: str
+    solutionBrief: str
+    timelines: str
+    sponsorship: str
+    lifecycleStatus: str  # e.g., POC, Pilot, Production
+    successCriteria: str
+    technicalApproach: str
+    resources: str
+    businessValue: str
+    financialBenefits: str
+    funding: str
+    raids: str  # Risks, Assumptions, Issues, Dependencies
+    architectureVision: str
+    description: str  # Raw description for LLM processing
+
+class IntakeValidation:
+    """Utility for intake field validation logic."""
+    CRITICAL_FIELDS = ["projectName", "owner", "funding", "problemStatement", "businessArea"]
+    
+    @staticmethod
+    def validate_timelines(timeline_str: str) -> bool:
+        import re
+        # Support Q[1-4] YYYY or MM/YYYY
+        q_pattern = r"^Q[1-4] \d{4}$"
+        m_pattern = r"^(0[1-9]|1[0-2])/\d{4}$"
+        return bool(re.match(q_pattern, timeline_str) or re.match(m_pattern, timeline_str))
+
+    @staticmethod
+    def validate_email_or_id(owner_str: str) -> bool:
+        import re
+        # Basic email or employee ID (e.g. E12345)
+        email_pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+        id_pattern = r"^[Ee]\d{5,}$"
+        return bool(re.match(email_pattern, owner_str) or re.match(id_pattern, owner_str))
+
+    @staticmethod
+    def validate_funding(funding_str: str) -> bool:
+        # Numeric or 'TBD'
+        if funding_str.upper() == "TBD":
+            return True
+        try:
+            # Strip currency symbols/commas
+            clean = funding_str.replace("$", "").replace(",", "").strip()
+            float(clean)
+            return True
+        except ValueError:
+            return False
+
 class HandoverData(TypedDict, total=False):
     tasks: List[HandoverTask]
     completionDate: Optional[str]
@@ -53,7 +110,7 @@ class HandoverData(TypedDict, total=False):
     riskLevel: Optional[str]
 
 class Artifacts(TypedDict, total=False):
-    intakeData: Dict[str, Any]
+    intakeData: IntakeData
     technicalDesign: Dict[str, Any]
     complianceStatus: List[Dict[str, str]]
     
@@ -76,6 +133,7 @@ class Governance(TypedDict, total=False):
     adminAction: Optional[str]  # ADMIN_APPROVE, ADMIN_REQUEST_INFO
     adminMessage: Optional[str]
     approvalDate: Optional[str]
+    requiredDocsPreview: List[str] # Predicted documents for user "heads up"
 
 class AuditLogEntry(TypedDict, total=False):
     timestamp: str

@@ -3,33 +3,82 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'reac
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
 
-const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, setRemediating }) => {
+const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, setRemediating, projectMetadata = {}, governance = {} }) => {
     const { theme } = useAiguTheme();
-    const [projectName, setProjectName] = useState(initialData.projectName || '');
     const [description, setDescription] = useState(initialData.description || '');
     const [submitting, setSubmitting] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
+
+    // Structured fields
+    const [formData, setFormData] = useState({
+        projectName: initialData.projectName || '',
+        owner: initialData.owner || '',
+        businessArea: initialData.businessArea || '',
+        problemStatement: initialData.problemStatement || '',
+        solutionBrief: initialData.solutionBrief || '',
+        timelines: initialData.timelines || '',
+        sponsorship: initialData.sponsorship || '',
+        lifecycleStatus: initialData.lifecycleStatus || '',
+        successCriteria: initialData.successCriteria || '',
+        technicalApproach: initialData.technicalApproach || '',
+        resources: initialData.resources || '',
+        businessValue: initialData.businessValue || '',
+        financialBenefits: initialData.financialBenefits || '',
+        funding: initialData.funding || '',
+        raids: initialData.raids || '',
+        architectureVision: initialData.architectureVision || ''
+    });
+
+    const fieldLabels = {
+        projectName: "Use Case Name (Project Title)",
+        owner: "Use Case Owner (Raiser of the ticket)",
+        businessArea: "Business Area",
+        problemStatement: "Problem Statement",
+        solutionBrief: "Solution Brief",
+        timelines: "Indicative Timelines",
+        sponsorship: "Sponsorship",
+        lifecycleStatus: "Lifecycle Status",
+        successCriteria: "POC/Pilot success criteria",
+        technicalApproach: "Technical Approach & Experiment",
+        resources: "Resources",
+        businessValue: "Primary Business Value",
+        financialBenefits: "Financial & Non-Financial Benefits",
+        funding: "Funding",
+        raids: "RAIDs",
+        architectureVision: "Architecture Vision"
+    };
+
+    // Critical fields from backend logic
+    const criticalFields = ["projectName", "owner", "funding", "problemStatement", "businessArea"];
+
+    const missingFields = projectMetadata.missingIntakeFields || [];
+    const validationErrors = projectMetadata.validationErrors || [];
+    const contextualHelp = projectMetadata.contextualHelp || {};
+    const hasGaps = missingFields.length > 0 || validationErrors.length > 0;
+
+    const handleUpdateField = (key, value) => {
+        setFormData(prev => ({ ...prev, [key]: value }));
+    };
+
+    // Check if critical fields are provided for the "Gate" logic
+    const isGateClosed = criticalFields.some(f => !formData[f]?.trim());
 
     const handleSubmit = async () => {
-        // Validation
-        if (!projectName.trim()) {
-            Alert.alert('Missing Information', 'Please enter a project name.');
-            return;
-        }
-        if (!description.trim()) {
-            Alert.alert('Missing Information', 'Please enter a project description.');
+        if (isGateClosed) {
+            Alert.alert('Incomplete', 'Please fill in all critical fields highlighted with *');
             return;
         }
 
         setSubmitting(true);
         try {
             await actions.initiateIntake({
-                projectName: projectName.trim(),
+                ...formData,
                 description: description.trim()
             });
             if (setRemediating) setRemediating(false);
         } catch (error) {
             console.error('Failed to submit intake:', error);
-            Alert.alert('Error', 'Failed to submit project. Please try again.');
+            Alert.alert('Error', 'Failed to submit. Please try again.');
         } finally {
             setSubmitting(false);
         }
@@ -37,109 +86,156 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
 
     return (
         <ResponsiveWrapper>
-            <View style={styles.formContainer}>
-                <Text style={{ ...theme.typography.header, color: isRemediation ? theme.colors.error : theme.colors.textPrimary, marginBottom: theme.spacing.md }}>
-                    {isRemediation ? '🛠️ Project Remediation' : 'Discovery Canvas'}
-                </Text>
-
-                <Text style={{ ...theme.typography.body, color: theme.colors.textSecondary, marginBottom: theme.spacing.lg }}>
-                    {isRemediation
-                        ? 'Please update your project to align with corporate safety policies. Remove any references to unverified external services.'
-                        : 'Describe your project idea below. AIGU will analyze it to determine the governance path and risk level.'}
-                </Text>
-
-                <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                    {/* Project Name Field */}
-                    <Text style={{ ...theme.typography.subheader, color: theme.colors.primary, marginBottom: theme.spacing.sm }}>
-                        Project Name
-                    </Text>
-                    <TextInput
-                        style={[styles.input, {
-                            backgroundColor: theme.colors.background,
-                            color: theme.colors.textPrimary,
-                            borderColor: theme.colors.border,
-                            ...theme.typography.body,
-                            minHeight: 50
-                        }]}
-                        placeholder="e.g. Marketing GenAI Accelerator"
-                        placeholderTextColor={theme.colors.textSecondary}
-                        value={projectName}
-                        onChangeText={setProjectName}
-                    />
-
-                    {/* Project Description Field */}
-                    <Text style={{ ...theme.typography.subheader, color: theme.colors.primary, marginBottom: theme.spacing.sm, marginTop: 16 }}>
-                        Project Description
+            <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.contentContainer}>
+                <View style={styles.formContainer}>
+                    <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, marginBottom: theme.spacing.md }}>
+                        {isRemediation ? '🛠️ Project Remediation' : 'Discovery Canvas'}
                     </Text>
 
-                    <TextInput
-                        style={[styles.input, {
-                            backgroundColor: theme.colors.background,
-                            color: theme.colors.textPrimary,
-                            borderColor: theme.colors.border,
-                            ...theme.typography.body
-                        }]}
-                        placeholder="e.g. Implementing a new GenAI Accelerator for marketing content generation using Amazon Bedrock..."
-                        placeholderTextColor={theme.colors.textSecondary}
-                        multiline
-                        numberOfLines={6}
-                        value={description}
-                        onChangeText={setDescription}
-                    />
+                    {validationErrors.length > 0 && (
+                        <View style={[styles.errorBox, { borderColor: theme.colors.error }]}>
+                            <Text style={{ ...theme.typography.subheader, color: theme.colors.error, marginBottom: 4 }}>
+                                ⚠️ Validation Issues
+                            </Text>
+                            {validationErrors.map((err, i) => (
+                                <Text key={i} style={{ color: theme.colors.textPrimary, fontSize: 13 }}>• {err}</Text>
+                            ))}
+                        </View>
+                    )}
 
-                    <TouchableOpacity
-                        style={[styles.button, {
-                            backgroundColor: submitting ? theme.colors.border : theme.colors.accent,
-                            opacity: submitting ? 0.6 : 1
-                        }]}
-                        onPress={handleSubmit}
-                        disabled={submitting}
-                    >
-                        <Text style={styles.buttonText}>
-                            {submitting ? 'SUBMITTING...' : (isRemediation ? 'RE-SUBMIT FOR REVIEW' : 'Submit to AIGU')}
-                        </Text>
-                    </TouchableOpacity>
+                    <Text style={{ ...theme.typography.body, color: theme.colors.textSecondary, marginBottom: theme.spacing.lg }}>
+                        {hasGaps
+                            ? "AIGU needs a few more details to complete your intake review. Fields marked with * are critical."
+                            : "Describe your project idea. AIGU will analyze it to determine the governance path and risk level."}
+                    </Text>
+
+                    <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                        {/* Project Name Field */}
+                        <Text style={styles.label}>{fieldLabels.projectName} *</Text>
+                        <TextInput
+                            style={[styles.input, { backgroundColor: theme.colors.background, color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
+                            placeholder="e.g. Marketing GenAI Accelerator"
+                            placeholderTextColor={theme.colors.textSecondary}
+                            value={formData.projectName}
+                            onChangeText={(v) => handleUpdateField('projectName', v)}
+                        />
+
+                        {!hasGaps && (
+                            <>
+                                <Text style={styles.label}>Initial Brief / Description</Text>
+                                <TextInput
+                                    style={[styles.textArea, { backgroundColor: theme.colors.background, color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
+                                    placeholder="Describe your use case..."
+                                    placeholderTextColor={theme.colors.textSecondary}
+                                    multiline
+                                    numberOfLines={8}
+                                    value={description}
+                                    onChangeText={setDescription}
+                                />
+
+                                <TouchableOpacity onPress={() => setShowAdvanced(!showAdvanced)} style={{ marginVertical: 10 }}>
+                                    <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>
+                                        {showAdvanced ? '− Hide Details' : '+ Add Specific Details Manually'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
+
+                        {(showAdvanced || hasGaps) && (
+                            <View style={styles.detailsContainer}>
+                                {Object.keys(fieldLabels).map(key => {
+                                    if (key === 'projectName') return null;
+                                    const isMissing = missingFields.includes(key);
+                                    const isCritical = criticalFields.includes(key);
+                                    const help = contextualHelp[key];
+
+                                    if (!showAdvanced && !isMissing && !isCritical && !formData[key]) return null;
+
+                                    return (
+                                        <View key={key} style={styles.fieldWrapper}>
+                                            <Text style={[styles.label, isCritical && { color: theme.colors.primary }]}>
+                                                {fieldLabels[key]} {isCritical && '*'}
+                                            </Text>
+
+                                            {help && (
+                                                <View style={styles.helpBox}>
+                                                    <Text style={styles.helpText}>{help.helpText}</Text>
+                                                    <Text style={styles.helpExample}>Example: {help.contextualExample}</Text>
+                                                </View>
+                                            )}
+
+                                            <TextInput
+                                                style={[styles.input, {
+                                                    backgroundColor: theme.colors.background,
+                                                    color: theme.colors.textPrimary,
+                                                    borderColor: isMissing ? theme.colors.warning : theme.colors.border
+                                                }]}
+                                                placeholder={`Enter ${fieldLabels[key].toLowerCase()}...`}
+                                                placeholderTextColor={theme.colors.textSecondary}
+                                                multiline={key !== 'owner' && key !== 'businessArea'}
+                                                value={formData[key]}
+                                                onChangeText={(v) => handleUpdateField(key, v)}
+                                            />
+                                        </View>
+                                    );
+                                })}
+                            </View>
+                        )}
+
+                        {projectMetadata.riskLevel && (
+                            <View style={[styles.complianceCard, { backgroundColor: theme.mode === 'dark' ? '#1c2532' : '#F0F7FF', borderColor: theme.colors.primary }]}>
+                                <Text style={styles.complianceHeader}>📋 Compliance Outlook (Heads Up)</Text>
+                                <Text style={styles.complianceSub}>Preliminary Risk: {projectMetadata.riskLevel}</Text>
+                                <View style={styles.docList}>
+                                    {(governance.requiredDocsPreview || []).map((doc, i) => (
+                                        <Text key={i} style={styles.docItem}>• {doc}</Text>
+                                    ))}
+                                </View>
+                                <Text style={styles.complianceNote}>Note: Mandatory sections will be finalized by the Librarian later.</Text>
+                            </View>
+                        )}
+
+                        <TouchableOpacity
+                            style={[styles.button, {
+                                backgroundColor: submitting || isGateClosed ? theme.colors.border : theme.colors.primary,
+                                opacity: submitting || isGateClosed ? 0.6 : 1
+                            }]}
+                            onPress={handleSubmit}
+                            disabled={submitting || isGateClosed}
+                        >
+                            <Text style={styles.buttonText}>
+                                {isGateClosed ? 'COMPLETE REQUIRED FIELDS' : (submitting ? 'PROCESSING...' : 'SUBMIT TO AIGU')}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-            </View>
+            </ScrollView>
         </ResponsiveWrapper>
     );
 };
 
 const styles = StyleSheet.create({
-    formContainer: {
-        maxWidth: 800,
-        width: '100%',
-        alignSelf: 'center',
-    },
-    card: {
-        padding: 24,
-        borderRadius: 12,
-        borderWidth: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3
-    },
-    input: {
-        borderWidth: 1,
-        borderRadius: 8,
-        padding: 16,
-        minHeight: 120,
-        textAlignVertical: 'top',
-        marginBottom: 24
-    },
-    button: {
-        paddingVertical: 14,
-        paddingHorizontal: 24,
-        borderRadius: 8,
-        alignItems: 'center'
-    },
-    buttonText: {
-        color: '#FFFFFF',
-        fontWeight: '700',
-        fontSize: 16
-    }
+    scrollContainer: { flex: 1 },
+    contentContainer: { paddingVertical: 40 },
+    formContainer: { maxWidth: 800, width: '100%', alignSelf: 'center', paddingHorizontal: 20 },
+    card: { padding: 32, borderRadius: 16, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 5 },
+    label: { fontSize: 13, fontWeight: '700', marginBottom: 6, marginTop: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+    input: { borderWidth: 1, borderRadius: 8, padding: 14, fontSize: 15, marginBottom: 8 },
+    textArea: { borderWidth: 1, borderRadius: 8, padding: 14, fontSize: 15, minHeight: 180, textAlignVertical: 'top', marginBottom: 16 },
+    detailsContainer: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
+    fieldWrapper: { marginBottom: 16 },
+    errorBox: { padding: 16, borderRadius: 8, borderWidth: 1, marginBottom: 20, backgroundColor: 'rgba(255,0,0,0.05)' },
+    helpBox: { padding: 10, backgroundColor: 'rgba(0,123,255,0.05)', borderRadius: 6, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#007bff' },
+    helpText: { fontSize: 12, color: '#666', fontStyle: 'italic' },
+    helpExample: { fontSize: 12, color: '#007bff', marginTop: 2, fontWeight: '600' },
+    complianceCard: { marginTop: 20, padding: 16, borderRadius: 10, borderWidth: 1, borderStyle: 'dotted' },
+    complianceHeader: { fontSize: 14, fontWeight: '700', color: '#007bff', marginBottom: 4 },
+    complianceSub: { fontSize: 12, fontWeight: '600', marginBottom: 8, opacity: 0.8 },
+    docList: { marginBottom: 10 },
+    docItem: { fontSize: 13, marginBottom: 2, fontWeight: '500' },
+    complianceNote: { fontSize: 11, fontStyle: 'italic', opacity: 0.6 },
+    button: { paddingVertical: 18, paddingHorizontal: 24, borderRadius: 8, alignItems: 'center', marginTop: 24 },
+    buttonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15, letterSpacing: 1 }
 });
 
 export default DiscoveryCanvas;
