@@ -15,7 +15,7 @@ LANGFUSE_SECRET_KEY = os.environ.get("LANGFUSE_SECRET_KEY")
 LANGFUSE_HOST = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
 # Initialize Langfuse
-langfuse = Langfuse(
+langfuse_client = Langfuse(
     public_key=LANGFUSE_PUBLIC_KEY,
     secret_key=LANGFUSE_SECRET_KEY,
     host=LANGFUSE_HOST
@@ -25,7 +25,7 @@ def get_langfuse_client():
     """
     Returns the initialized Langfuse client instance.
     """
-    return langfuse
+    return langfuse_client
 
 # Runtime Override
 _runtime_model_override = None
@@ -50,12 +50,11 @@ def get_active_prompt(prompt_name: str, tag: str = 'production'):
     
     try:
         print(f"LangFuse: Fetching prompt '{prompt_name}' (tag: {tag})")
-        prompt = langfuse.get_prompt(prompt_name, label=tag)
+        prompt = langfuse_client.get_prompt(prompt_name, label=tag)
         _PROMPT_CACHE[cache_key] = prompt
         return prompt
     except Exception as e:
         print(f"Error fetching prompt {prompt_name}: {e}")
-        # In production, you might want to load a local fallback file here
         raise e
 
 def get_bedrock_client():
@@ -68,43 +67,27 @@ def invoke_nova(
 ) -> str:
     """
     Invokes Amazon Nova using LangFuse Prompt Object with dynamic config.
-    
-    Args:
-        prompt_object: LangFuse Prompt Object with .prompt and .config
-        messages: Conversation messages
-        state: Optional state dict for prompt variable substitution
-    
-    Returns:
-        Model response text
     """
     client = get_bedrock_client()
     
-    # Extract system prompt (with variable substitution if state provided)
+    # Extract system prompt
     system_prompt = prompt_object.prompt if hasattr(prompt_object, 'prompt') else str(prompt_object)
     
-    # Try to compile prompt with state variables if available
     if state and hasattr(prompt_object, 'compile'):
         try:
             system_prompt = prompt_object.compile(**state)
         except Exception as e:
             print(f"Warning: Could not compile prompt with state: {e}")
-            # Fall back to raw prompt
     
-    # Extract config from LangFuse (with robust fallbacks)
     config = {}
     if hasattr(prompt_object, 'config') and prompt_object.config:
         config = prompt_object.config
     
-    # User Request: Provide safe fallbacks for all config values
     model_id = config.get("model") or get_model_id() or "amazon.nova-lite-v1:0"
     parameters = config.get("parameters") or {}
-    temperature = parameters.get("temperature", 0.3)  # Default for governance
-    max_tokens = parameters.get("max_tokens", 500)   # Safe default for structured responses
+    temperature = parameters.get("temperature", 0.3)
+    max_tokens = parameters.get("max_tokens", 500)
     
-    # Print only if debug is enabled or briefly
-    print(f"LLM: Invoke {model_id} (T={temperature}, M={max_tokens})")
-    
-    # Format messages for Converse API
     formatted_messages = []
     for msg in messages:
         formatted_messages.append({
@@ -112,19 +95,41 @@ def invoke_nova(
             "content": [{"text": msg["content"]}]
         })
 
+    # Telemetry Guard
+    generation = None
     try:
-        # Wrap generation with LangFuse
-        generation = langfuse.generation(
-            name="Amazon Nova Invoke",
-            model=model_id,
-            model_parameters={
-                "maxTokens": max_tokens,
-                "temperature": temperature
-            },
-            input=messages,
-            metadata=config
-        )
+        trace_name = prompt_object.name if hasattr(prompt_object, 'name') else "Amazon Nova Invoke"
         
+        # Use defensive getattr to handle different SDK versions gracefully
+        trace_fn = getattr(langfuse_client, 'trace', None)
+        if trace_fn:
+            trace = trace_fn(
+                name=trace_name,
+                user_id=state.get('userId') if state else None,
+                session_id=state.get('submissionId') if state else None
+            )
+            generation = trace.generation(
+                name=f"Invoke: {model_id}",
+                model=model_id,
+                model_parameters={"maxTokens": max_tokens, "temperature": temperature},
+                input=messages,
+                metadata=config
+            )
+        else:
+            # Fallback to direct generation if trace method is missing
+            gen_fn = getattr(langfuse_client, 'generation', None)
+            if gen_fn:
+                generation = gen_fn(
+                    name=trace_name,
+                    model=model_id,
+                    model_parameters={"maxTokens": max_tokens, "temperature": temperature},
+                    input=messages,
+                    metadata=config
+                )
+    except Exception as telemetry_init_error:
+        print(f"Langfuse: Failed to initialize trace/generation: {telemetry_init_error}")
+
+    try:
         response = client.converse(
             modelId=model_id,
             messages=formatted_messages,
@@ -137,29 +142,23 @@ def invoke_nova(
         
         output_text = response["output"]["message"]["content"][0]["text"]
         
-        # End generation trace
-        generation.end(
-            output=output_text,
-            usage={
-                "input": response["usage"]["inputTokens"],
-                "output": response["usage"]["outputTokens"],
-                "total": response["usage"]["totalTokens"]
-            }
-        )
+        # End generation trace if it exists
+        if generation and hasattr(generation, 'update'):
+            generation.update(
+                output=output_text,
+                usage={
+                    "input": response["usage"]["inputTokens"],
+                    "output": response["usage"]["outputTokens"],
+                    "total": response["usage"]["totalTokens"]
+                }
+            )
         
         return output_text
     except Exception as e:
         print(f"Error invoking Amazon Nova: {e}")
-        
-        # End generation with error if it was started
-        if 'generation' in locals():
-            generation.end(
-                level="ERROR",
-                status_message=str(e),
-                output=str(e)
-            )
+        if generation and hasattr(generation, 'update'):
+            generation.update(level="ERROR", status_message=str(e), output=str(e))
             
-        # Fallback to a structured error message that agents can handle
         return json.dumps({
             "error": str(e),
             "fallback": True,

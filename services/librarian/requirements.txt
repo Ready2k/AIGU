@@ -1,0 +1,6 @@
+pypdf
+python-docx
+python-pptx
+markdown
+atlassian-python-api
+beautifulsoup4

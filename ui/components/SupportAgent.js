@@ -14,7 +14,7 @@ import { useAiguState } from '../hooks/useAiguState';
  * - Provides actionable checklists
  */
 
-const SupportAgent = ({ state, onClose, actions: providedActions }) => {
+const SupportAgent = ({ state, onClose, actions: providedActions, contextOverride }) => {
     const { theme } = useAiguTheme();
 
     // Use provided actions if available, fallback to new hook
@@ -99,7 +99,8 @@ const SupportAgent = ({ state, onClose, actions: providedActions }) => {
                     auditLog: state?.auditLog,
                     tasks: state?.chainOfThought && state.chainOfThought.length > 0
                         ? state.chainOfThought[state.chainOfThought.length - 1].tasks
-                        : []
+                        : [],
+                    contextOverride: contextOverride
                 }
             });
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
+import { getShadow } from '../utils/shadows';
 import WorkflowProgress from '../components/WorkflowProgress';
 
 const SupportStatus = ({ state, onViewLog, refresh, onRemediate }) => {
@@ -131,11 +132,7 @@ const styles = StyleSheet.create({
         padding: 32,
         borderRadius: 12,
         borderWidth: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.1,
-        shadowRadius: 15,
-        elevation: 6
+        ...getShadow('#000', { width: 0, height: 6 }, 0.1, 15, 6)
     },
     header: {
         flexDirection: 'row',
@@ -153,11 +150,7 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         borderRadius: 4,
         marginLeft: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2
+        ...getShadow('#000', { width: 0, height: 2 }, 0.1, 2, 2)
     },
     alertBox: {
         padding: 20,
@@ -165,11 +158,7 @@ const styles = StyleSheet.create({
         borderLeftWidth: 4,
         marginTop: 24,
         marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1
+        ...getShadow('#000', { width: 0, height: 2 }, 0.05, 4, 1)
     },
     guidanceBox: {
         padding: 20,
@@ -177,11 +166,7 @@ const styles = StyleSheet.create({
         borderLeftWidth: 4,
         marginTop: 8,
         marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1
+        ...getShadow('#000', { width: 0, height: 2 }, 0.05, 4, 1)
     },
     footer: {
         marginTop: 24,
@@ -194,11 +179,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         borderWidth: 1,
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2
+        ...getShadow('#000', { width: 0, height: 2 }, 0.1, 4, 2)
     },
     refreshButton: {
         padding: 8,
@@ -210,11 +191,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
         borderRadius: 8,
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2
+        ...getShadow('#000', { width: 0, height: 2 }, 0.1, 4, 2)
     }
 });
 

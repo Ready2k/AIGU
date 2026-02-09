@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
+import { getShadow } from '../utils/shadows';
 
 /**
  * SessionLobby Screen
@@ -141,11 +142,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingVertical: 12,
         borderRadius: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3
+        ...getShadow('#000', { width: 0, height: 2 }, 0.1, 4, 3)
     },
     newButtonText: {
         color: '#FFF',
@@ -160,11 +157,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2
+        ...getShadow('#000', { width: 0, height: 2 }, 0.05, 8, 2)
     },
     cardHeader: {
         flexDirection: 'row',

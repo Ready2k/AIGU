@@ -1,33 +1,71 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
+import { getShadow } from '../utils/shadows';
 
-const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, setRemediating, projectMetadata = {}, governance = {} }) => {
+const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, setRemediating, projectMetadata = {}, governance = {}, onDraftUpdate }) => {
     const { theme } = useAiguTheme();
     const [description, setDescription] = useState(initialData.description || '');
     const [submitting, setSubmitting] = useState(false);
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     // Structured fields
+    // Structured fields initialized with empty strings to avoid uncontrolled component warnings
     const [formData, setFormData] = useState({
-        projectName: initialData.projectName || '',
-        owner: initialData.owner || '',
-        businessArea: initialData.businessArea || '',
-        problemStatement: initialData.problemStatement || '',
-        solutionBrief: initialData.solutionBrief || '',
-        timelines: initialData.timelines || '',
-        sponsorship: initialData.sponsorship || '',
-        lifecycleStatus: initialData.lifecycleStatus || '',
-        successCriteria: initialData.successCriteria || '',
-        technicalApproach: initialData.technicalApproach || '',
-        resources: initialData.resources || '',
-        businessValue: initialData.businessValue || '',
-        financialBenefits: initialData.financialBenefits || '',
-        funding: initialData.funding || '',
-        raids: initialData.raids || '',
-        architectureVision: initialData.architectureVision || ''
+        projectName: '', owner: '', businessArea: '', problemStatement: '', solutionBrief: '',
+        timelines: '', sponsorship: '', lifecycleStatus: '', successCriteria: '',
+        technicalApproach: '', resources: '', businessValue: '', financialBenefits: '',
+        funding: '', raids: '', architectureVision: ''
     });
+
+    const lastSyncedData = useRef(null);
+    const lastDraftShared = useRef(null);
+
+    // Sync AI-extracted data into form state when it arrives
+    useEffect(() => {
+        // Prevent re-syncing if the data hasn't actually changed
+        const dataKey = JSON.stringify(initialData);
+        if (lastSyncedData.current === dataKey) return;
+        lastSyncedData.current = dataKey;
+
+        setFormData(prev => ({
+            ...prev,
+            projectName: initialData.projectName || prev.projectName || '',
+            owner: initialData.owner || prev.owner || '',
+            businessArea: initialData.businessArea || prev.businessArea || '',
+            problemStatement: initialData.problemStatement || prev.problemStatement || '',
+            solutionBrief: initialData.solutionBrief || prev.solutionBrief || '',
+            timelines: initialData.timelines || prev.timelines || '',
+            sponsorship: initialData.sponsorship || prev.sponsorship || '',
+            lifecycleStatus: initialData.lifecycleStatus || prev.lifecycleStatus || '',
+            successCriteria: initialData.successCriteria || prev.successCriteria || '',
+            technicalApproach: initialData.technicalApproach || prev.technicalApproach || '',
+            resources: initialData.resources || prev.resources || '',
+            businessValue: initialData.businessValue || prev.businessValue || '',
+            financialBenefits: initialData.financialBenefits || prev.financialBenefits || '',
+            funding: initialData.funding || prev.funding || '',
+            raids: initialData.raids || prev.raids || '',
+            architectureVision: initialData.architectureVision || prev.architectureVision || ''
+        }));
+        if (initialData.description && !description) {
+            setDescription(initialData.description);
+        }
+    }, [initialData]);
+
+    // Notify parent of draft updates for context injection
+    useEffect(() => {
+        if (!onDraftUpdate) return;
+
+        const draft = { ...formData, description };
+        const draftKey = JSON.stringify(draft);
+
+        // Prevent sharing the same draft back to the parent to avoid loops
+        if (lastDraftShared.current === draftKey) return;
+        lastDraftShared.current = draftKey;
+
+        onDraftUpdate(draft);
+    }, [formData, description, onDraftUpdate]);
 
     const fieldLabels = {
         projectName: "Use Case Name (Project Title)",
@@ -61,7 +99,11 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
     };
 
     // Check if critical fields are provided for the "Gate" logic
-    const isGateClosed = criticalFields.some(f => !formData[f]?.trim());
+    // If it's the first submission (no gaps), only require Name & Description
+    // If gaps exist, enforce ALL critical fields
+    const isGateClosed = hasGaps
+        ? criticalFields.some(f => !formData[f]?.trim())
+        : (!formData.projectName?.trim() || !description?.trim());
 
     const handleSubmit = async () => {
         if (isGateClosed) {
@@ -218,7 +260,7 @@ const styles = StyleSheet.create({
     scrollContainer: { flex: 1 },
     contentContainer: { paddingVertical: 40 },
     formContainer: { maxWidth: 800, width: '100%', alignSelf: 'center', paddingHorizontal: 20 },
-    card: { padding: 32, borderRadius: 16, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 5 },
+    card: { padding: 32, borderRadius: 16, borderWidth: 1, ...getShadow('#000', { width: 0, height: 4 }, 0.1, 12, 5) },
     label: { fontSize: 13, fontWeight: '700', marginBottom: 6, marginTop: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
     input: { borderWidth: 1, borderRadius: 8, padding: 14, fontSize: 15, marginBottom: 8 },
     textArea: { borderWidth: 1, borderRadius: 8, padding: 14, fontSize: 15, minHeight: 180, textAlignVertical: 'top', marginBottom: 16 },

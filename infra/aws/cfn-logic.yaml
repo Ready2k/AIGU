@@ -15,6 +15,19 @@ Parameters:
     Type: String
     Default: "amazon.nova-pro-v1:0"
     Description: Default Amazon Nova Model ID
+  AtlassianUrl:
+    Type: String
+    Default: ""
+    Description: Atlassian Instance URL
+  AtlassianUser:
+    Type: String
+    Default: ""
+    Description: Atlassian User Email
+  AtlassianApiToken:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Atlassian API Token
 
 Resources:
   # 1. IAM Role for LangGraph Execution
@@ -126,6 +139,9 @@ Resources:
           LANGFUSE_PUBLIC_KEY: !Ref LangFusePublicKey
           LANGFUSE_HOST: !Ref LangFuseHost
           NOVA_MODEL_ID: !Ref NovaModelId
+          ATLASSIAN_URL: !Ref AtlassianUrl
+          ATLASSIAN_USER: !Ref AtlassianUser
+          ATLASSIAN_API_TOKEN: !Ref AtlassianApiToken
       Code: ../../build_logic
 
 Outputs:

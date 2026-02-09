@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import { useAiguState } from '../hooks/useAiguState';
+import { getShadow } from '../utils/shadows';
 
 /**
  * FileManager Component - S3 Upload & Gallery
@@ -297,11 +298,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         borderWidth: 1,
         padding: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2
+        ...getShadow('#000', { width: 0, height: 2 }, 0.1, 4, 2)
     },
     filePreview: {
         height: 80,

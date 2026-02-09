@@ -4,3 +4,9 @@ langchain
 pydantic
 langfuse
 langgraph-checkpoint-dynamodb
+pypdf
+python-docx
+python-pptx
+markdown
+atlassian-python-api
+beautifulsoup4

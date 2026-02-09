@@ -6,6 +6,7 @@ import WorkflowProgress from '../components/WorkflowProgress';
 import SupportAgent from '../components/SupportAgent';
 import PromptManager from '../components/PromptManager';
 import FileManager from '../components/FileManager';
+import { getShadow } from '../utils/shadows';
 
 /**
  * AdminDashboard Component - Desktop-Optimized Admin Interface
@@ -690,11 +691,7 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: -2, height: 0 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 4
+        ...getShadow('#000', { width: -2, height: 0 }, 0.2, 4, 4)
     }
 });
 

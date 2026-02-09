@@ -9,6 +9,9 @@ import DiscoveryCanvas from './DiscoveryCanvas';
 import LifecycleSubmission from './LifecycleSubmission';
 import DeltaReview from './DeltaReview';
 import LogViewer from './LogViewer';
+import { getShadow } from '../utils/shadows';
+
+const defaultIntakeData = {};
 
 /**
  * Dashboard Component - Desktop-Optimized Governance Workspace
@@ -34,6 +37,7 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
     const [isRemediating, setIsRemediating] = useState(false);
     const [supportPanelOpen, setSupportPanelOpen] = useState(true);
     const [filePanelOpen, setFilePanelOpen] = useState(true);
+    const [activeDraft, setActiveDraft] = useState(null);
 
     // Mock actions - replace with actual useAiguState hook
     const actions = {
@@ -250,10 +254,11 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                 <DiscoveryCanvas
                     actions={liveActions}
                     isRemediation={isRemediating}
-                    initialData={activeState.artifacts?.intakeData || {}}
+                    initialData={activeState.artifacts?.intakeData || defaultIntakeData}
                     setRemediating={setIsRemediating}
                     projectMetadata={activeState.projectMetadata || {}}
                     governance={activeState.governance || {}}
+                    onDraftUpdate={setActiveDraft}
                 />
             );
         }
@@ -471,6 +476,7 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                         state={activeState}
                         actions={liveActions}
                         onClose={() => setSupportPanelOpen(false)}
+                        contextOverride={activeDraft}
                     />
                 </View>
             )}
@@ -595,11 +601,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         borderLeftWidth: 4,
         marginTop: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1
+        ...getShadow('#000', { width: 0, height: 2 }, 0.05, 4, 1)
     },
     actionButton: {
         paddingVertical: 14,
@@ -637,11 +639,7 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: -2, height: 0 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 4
+        ...getShadow('#000', { width: -2, height: 0 }, 0.2, 4, 4)
     },
     emptyState: {
         flex: 1,

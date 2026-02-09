@@ -30,7 +30,9 @@ deploy() {
       --implementation cp \
       --python-version 3.12 \
       --only-binary=:all: \
-      --upgrade \
+      --ignore-installed \
+      --no-warn-conflicts \
+      --quiet \
       --no-cache-dir \
       -r requirements-prod.txt
   
@@ -38,6 +40,7 @@ deploy() {
   ls -F build_logic | head -n 10
 
   cp -r aigu build_logic/
+  cp -r services build_logic/
   
   # 3. Package & Deploy Logic
   aws cloudformation package --template-file infra/aws/cfn-logic.yaml --s3-bucket $ARTIFACT_BUCKET --output-template-file infra/aws/packaged-logic.yaml --region ${REGION}
@@ -49,7 +52,10 @@ deploy() {
         LangFuseSecretKey="$LANGFUSE_SECRET_KEY" \
         LangFusePublicKey="$LANGFUSE_PUBLIC_KEY" \
         LangFuseHost="${LANGFUSE_HOST:-https://cloud.langfuse.com}" \
-        NovaModelId="$NOVA_MODEL_ID"
+        NovaModelId="$NOVA_MODEL_ID" \
+        AtlassianUrl="$ATLASSIAN_URL" \
+        AtlassianUser="$ATLASSIAN_USER" \
+        AtlassianApiToken="$ATLASSIAN_API_TOKEN"
   
   aws cloudformation deploy --template-file infra/aws/cfn-gateway.yaml --stack-name ${STACK_BASE}-gateway --region ${REGION}
   

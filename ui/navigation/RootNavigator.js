@@ -13,7 +13,8 @@ import DevConsole from '../screens/DevConsole';
 import AdminQueue from '../screens/AdminQueue';
 import LifecycleSubmission from '../screens/LifecycleSubmission';
 import NavigationBreadcrumbs from '../components/NavigationBreadcrumbs';
-import { TouchableOpacity } from 'react-native';
+import { TouchableOpacity, ActivityIndicator } from 'react-native';
+import { getShadow } from '../utils/shadows';
 
 const RootNavigator = ({ submissionId, userId, isAdmin, onBackToLobby, onLogout }) => {
     // 1. Session Recovery & State Subscription via Hook
@@ -159,11 +160,7 @@ const styles = StyleSheet.create({
         padding: 24,
         borderRadius: 12,
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 5
+        ...getShadow('#000', { width: 0, height: 4 }, 0.1, 10, 5)
     },
     loadingText: {
         marginTop: 16,

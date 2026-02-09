@@ -32,13 +32,19 @@ const BORDER_RADIUS = {
 };
 
 const SHADOWS = {
-    card: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    }
+    card: Platform.select({
+        web: {
+            boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+            elevation: 3,
+        },
+        default: {
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 3,
+        }
+    })
 };
 
 // 1. Light Mode Palette (Default Enterprise Look)
@@ -88,13 +94,19 @@ export const DarkPalette = {
     spacing: SPACING,
     borderRadius: BORDER_RADIUS,
     shadows: {
-        card: {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 10,
-            elevation: 8,
-        }
+        card: Platform.select({
+            web: {
+                boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.3)',
+                elevation: 8,
+            },
+            default: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 10,
+                elevation: 8,
+            }
+        })
     }
 };
 

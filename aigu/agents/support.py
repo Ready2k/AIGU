@@ -43,6 +43,22 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
     audit_log = state.get("auditLog", [])
     artifacts = state.get("artifacts", {})
     
+    # [CONTEXT INJECTION] Support for live draft visibility
+    # Check if a frontend contextOverride was passed into the graph state
+    context_override = state.get("contextOverride")
+    if context_override:
+        print(f"Support: Merging Context Override into agent reasoning: {list(context_override.keys())}")
+        project_metadata = {**project_metadata, **context_override}
+        # Sync description into intakeData artifacts if present
+        if 'description' in context_override:
+            if 'intakeData' not in artifacts: artifacts['intakeData'] = {}
+            artifacts['intakeData']['description'] = context_override['description']
+        # Sync other form fields
+        for k, v in context_override.items():
+            if k != 'description' and v:
+                if 'intakeData' not in artifacts: artifacts['intakeData'] = {}
+                artifacts['intakeData'][k] = v
+    
     # 1. Extract Comprehensive Context for Nova
     print(f"Support: Extracting comprehensive state context for personalized guidance.")
     

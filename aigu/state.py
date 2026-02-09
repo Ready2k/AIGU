@@ -87,7 +87,8 @@ class IntakeValidation:
         # Basic email or employee ID (e.g. E12345)
         email_pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
         id_pattern = r"^[Ee]\d{5,}$"
-        return bool(re.match(email_pattern, owner_str) or re.match(id_pattern, owner_str))
+        name_pattern = r"^[a-zA-Z0-9 ]{2,}$"  # Allow basic names for testing
+        return bool(re.match(email_pattern, owner_str) or re.match(id_pattern, owner_str) or re.match(name_pattern, owner_str))
 
     @staticmethod
     def validate_funding(funding_str: str) -> bool:

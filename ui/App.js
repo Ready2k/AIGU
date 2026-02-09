@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, SafeAreaView, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, SafeAreaView, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { getShadow } from './utils/shadows';
 import Dashboard from './screens/Dashboard';
 import AdminDashboard from './screens/AdminDashboard';
 import DevConsole from './screens/DevConsole';
@@ -118,11 +119,7 @@ const styles = StyleSheet.create({
         padding: 40,
         borderRadius: 16,
         borderWidth: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 5
+        ...getShadow('#000', { width: 0, height: 4 }, 0.1, 10, 5)
     },
     inputGroup: {
         marginTop: 32,

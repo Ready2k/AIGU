@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
+import { getShadow } from '../utils/shadows';
 
 /**
  * WorkflowProgress Component
@@ -300,11 +301,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 4
+        ...getShadow('#000', { width: 0, height: 2 }, 0.2, 4, 4)
     },
     pathBadgeText: {
         color: '#FFF',
@@ -325,11 +322,7 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 3,
-        elevation: 3
+        ...getShadow('#000', { width: 0, height: 2 }, 0.2, 3, 3)
     },
     stageNumber: {
         fontSize: 14,

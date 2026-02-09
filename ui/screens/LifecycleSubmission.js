@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
+import { getShadow } from '../utils/shadows';
 
 /**
  * LifecycleSubmission Screen
@@ -206,11 +207,7 @@ const styles = StyleSheet.create({
         padding: 32,
         borderRadius: 12,
         borderWidth: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 5
+        ...getShadow('#000', { width: 0, height: 4 }, 0.1, 10, 5)
     },
     sectionTitle: {
         fontSize: 14,
@@ -244,11 +241,7 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         borderRadius: 8,
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2
+        ...getShadow('#000', { width: 0, height: 2 }, 0.1, 4, 2)
     },
     submitButtonText: {
         color: '#FFF',

@@ -32,15 +32,30 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     risk_level = project_metadata.get("riskLevel", "Low")
     submission_id = state.get("submissionId", "unknown")
     
-    # 1. Invoke Amazon Nova for Intelligent Consolidation
-    files = artifacts.get("files", [])
-    print(f"Librarian: Invoking Amazon Nova for artifact consolidation. (Files uploaded: {files})")
+    # 1. Invoke Upgraded Librarian Service for Extraction & Audit
+    from services.librarian.main import librarian_audit_handler
+    
+    print(f"Librarian: Running Unified Extractor for artifacts and links.")
+    audit_results = librarian_audit_handler(state)
+    audit_context = audit_results.get("librarian_context", "No additional document context extracted.")
+    
+    # 2. Invoke Amazon Nova for Intelligent Consolidation
+    print(f"Librarian: Invoking Amazon Nova for artifact consolidation.")
+    
+    user_prompt = f"""
+    Risk Level: {risk_level}
+    Intake Data: {intake_data}
+    Existing technicalDesign: {tech_design}
+    
+    --- EXTRACTED CONTENT FROM FILES & LINKS ---
+    {audit_context}
+    """
     
     analysis = query_nova_json(
-        prompt_name="librarian_agent",  # Use LangFuse prompt (correct name)
-        user_prompt=f"Risk Level: {risk_level}\nIntake Data: {intake_data}\nExisting technicalDesign: {tech_design}\nUploaded File Attachments: {files}",
+        prompt_name="librarian_agent",
+        user_prompt=user_prompt,
         expected_keys=["updatedTechnicalDesign", "actionsTaken", "thoughtProcess", "missingSections"],
-        state=state  # Pass full state for variable substitution
+        state=state
     )
 
 

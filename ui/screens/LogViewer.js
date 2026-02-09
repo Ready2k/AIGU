@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
+import { getShadow } from '../utils/shadows';
 
 const LogViewer = ({ auditLog, fetchReasoning }) => {
     const { theme } = useAiguTheme();
@@ -66,7 +67,7 @@ const LogEntry = ({ entry, theme, fetchReasoning, isLast }) => {
         <View style={styles.entryRow}>
             {/* Timeline Segment */}
             <View style={styles.timelineSegment}>
-                <View style={[styles.node, { backgroundColor: nodeColor, shadowColor: nodeColor }]} />
+                <View style={[styles.node, { backgroundColor: nodeColor, ...getShadow(nodeColor, { width: 0, height: 0 }, 0.5, 4, 0) }]} />
                 {!isLast && <View style={[styles.line, { backgroundColor: theme.colors.border }]} />}
             </View>
 
@@ -156,9 +157,7 @@ const styles = StyleSheet.create({
         height: 14,
         borderRadius: 7,
         zIndex: 2,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 4,
+        ...getShadow(undefined, { width: 0, height: 0 }, 0.5, 4, 0),
         marginTop: 6
     },
     line: {
@@ -174,11 +173,7 @@ const styles = StyleSheet.create({
         padding: 24,
         borderRadius: 12,
         borderWidth: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.03,
-        shadowRadius: 8,
-        elevation: 2
+        ...getShadow('#000', { width: 0, height: 4 }, 0.03, 8, 2)
     },
     cardHeader: {
         flexDirection: 'row',

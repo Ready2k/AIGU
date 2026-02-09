@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
+import { getShadow } from '../utils/shadows';
 import { saveCredentials, getCredentials } from '../utils/auth';
 
 const DevConsole = ({ onClose, actions }) => {
@@ -187,11 +188,7 @@ const styles = StyleSheet.create({
         padding: 32,
         borderRadius: 12,
         borderWidth: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 3
+        ...getShadow('#000', { width: 0, height: 4 }, 0.1, 10, 3)
     },
     inputContainer: {
         marginBottom: 20

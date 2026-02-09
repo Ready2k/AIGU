@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
+import { getShadow } from '../utils/shadows';
 
 const DeltaReview = ({ state, onSubmit }) => {
     const { theme } = useAiguTheme();
@@ -62,11 +63,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         marginBottom: 24,
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3
+        ...getShadow('#000', { width: 0, height: 2 }, 0.1, 4, 3)
     },
     bannerText: {
         fontSize: 16,
@@ -76,11 +73,7 @@ const styles = StyleSheet.create({
         padding: 32,
         borderRadius: 12,
         borderWidth: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 2
+        ...getShadow('#000', { width: 0, height: 4 }, 0.05, 10, 2)
     },
     diffCard: {
         padding: 20,

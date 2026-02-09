@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from typing import Dict, Any
 from aigu.state import GlobalState, AuditLogEntry
@@ -61,19 +62,16 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
         prompt_tmpl = "Analyze project and extract fields."
 
     # Perform analysis and extraction
+    # The Langfuse prompt "intake-orchestrator" handles the complex instructions.
+    # We pass the variables it expects.
     analysis = query_nova_json(
         prompt_name="intake-orchestrator",
-        user_prompt=(
-            f"Project Context: {description}\n"
-            f"Existing Data: {json.dumps(intake_data)}\n\n"
-            "1. Extract/refine fields: " + ", ".join(intake_fields.keys()) + "\n"
-            "2. Identify missing fields.\n"
-            "3. FOR EACH MISSING FIELD: Provide 'helpText' and a 'contextualExample' tailored to this project's theme.\n"
-            "   (e.g., If it's a Chatbot, an extraction for 'raids' might suggest 'Model Latency').\n"
-            "4. Categorize path as 'Accelerator', 'Standard', or 'Stop'.\n"
-        ),
-        expected_keys=["path", "reason", "action", "thoughtProcess", "extractedData", "missingFields", "contextualHelp", "preliminaryRiskLevel"],
-        state=state
+        user_prompt="Analyze this project intake.", # This is effectively ignored/appended if the system prompt is used as a template
+        state={
+            "description": description,
+            "intakeData": json.dumps(intake_data)
+        },
+        expected_keys=["path", "reason", "action", "thoughtProcess", "extractedData", "missingFields", "contextualHelp", "preliminaryRiskLevel"]
     )
 
     path = analysis.get("path", "Standard")
@@ -110,10 +108,15 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
 
     # 5. Data Merging (Memory Enhancement)
     new_intake_data = intake_data.copy()
-    for key, value in extracted_data.items():
-        # Only overwrite if new value is more substantive than "Unknown" or empty
-        if value and str(value).lower() not in ["unknown", "n/a", "none"]:
-            new_intake_data[key] = value
+    if isinstance(extracted_data, dict):
+        for key, value in extracted_data.items():
+            # Only overwrite if new value is more substantive than "Unknown" or empty
+            if value and str(value).lower() not in ["unknown", "n/a", "none"]:
+                new_intake_data[key] = value
+    else:
+        print(f"Warning: extractedData is not a dict: {extracted_data}")
+        # Safe fallback
+        extracted_data = {}
     
     # Update description to combine info if necessary
     new_intake_data["description"] = description
@@ -142,7 +145,18 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     is_intake_complete = len(critical_gaps) == 0 and len(validation_errors) == 0
 
     # 7. Persistence & Audit
-    s3_uri = upload_reasoning_to_s3(submission_id, "Intake Orchestrator", analysis.get("thoughtProcess", ""))
+    thought_process = analysis.get("thoughtProcess")
+    if not thought_process or thought_process == "Error":
+        # Fallback if model didn't return reasoning
+        thought_process = (
+            f"Automated Analysis for {project_name}:\n"
+            f"- Path: {path}\n"
+            f"- Risk: {prelim_risk}\n"
+            f"- Extracted: {len(extracted_data)} fields\n"
+            f"- Missing: {len(missing_fields)} fields\n"
+            f"- Reason: {reason}"
+        )
+    s3_uri = upload_reasoning_to_s3(submission_id, "Intake Orchestrator", thought_process)
 
     # Update Metadata
     new_metadata = existing_metadata.copy()
