@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Linking, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Linking, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import { getShadow } from '../utils/shadows';
 
@@ -84,7 +84,7 @@ export const AttachmentManager = ({ projectId, files, artifacts, onUploadSuccess
     };
 
     return (
-        <View style={styles.container}>
+        <ScrollView style={styles.container}>
             {displayList.length === 0 ? (
                 <View style={[styles.emptyContainer, { borderColor: theme.colors.border }]}>
                     <Text style={{ color: theme.colors.textSecondary }}>No attachments yet.</Text>
@@ -141,7 +141,7 @@ export const AttachmentManager = ({ projectId, files, artifacts, onUploadSuccess
                     </TouchableOpacity>
                 )}
             </View>
-        </View>
+        </ScrollView>
     );
 };
 

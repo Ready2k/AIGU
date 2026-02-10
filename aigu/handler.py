@@ -10,9 +10,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     print(f"Received event: {json.dumps(event)}")
     
+    
     path = event.get("path", "")
     method = event.get("httpMethod", "POST")
     
+    # Normalize Path (Handle AWS API Gateway Stage /v1/)
+    if path.startswith("/v1/"):
+        path = path.replace("/v1/", "/", 1)
+        
     # 0. Load System Config (Bootstrap)
     load_system_config()
     
@@ -271,19 +276,35 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     # Ensure effective userId logic matches other handlers
                     upload_user_id = user_id if user_id and user_id != 'null' else "anonymous"
                     
-                    print(f"Registering file {file_name} in Global State for {submission_id_for_file}")
-                    state_table.update_item(
-                        Key={
-                            "submissionId": submission_id_for_file, 
-                            "userId": upload_user_id
-                        },
-                        UpdateExpression="SET artifacts.files = list_append(if_not_exists(artifacts.files, :empty_list), :file_data)",
-                        ExpressionAttributeValues={
-                            ":file_data": [file_name],
-                            ":empty_list": []
-                        },
-                        ReturnValues="UPDATED_NEW"
-                    )
+                    # 3. Register in Global State
+                    # [ROBUST UPDATE] Fetch first to avoid list_append vs map conflict
+                    try:
+                        resp = state_table.get_item(Key={"submissionId": submission_id_for_file, "userId": upload_user_id})
+                        item = resp.get("Item", {})
+                        artifacts = item.get("artifacts", {})
+                        files = artifacts.get("files")
+                        
+                        # Unify to List
+                        if isinstance(files, dict):
+                            # Convert Map to List (just key URIs)
+                            new_files_list = list(files.keys())
+                        elif isinstance(files, list):
+                            new_files_list = files
+                        else:
+                            new_files_list = []
+                            
+                        s3_uri = f"s3://{bucket_name}/{s3_key}"
+                        if s3_uri not in new_files_list:
+                            new_files_list.append(s3_uri)
+                            
+                        print(f"Updating files list for {submission_id_for_file}: {new_files_list}")
+                        state_table.update_item(
+                            Key={"submissionId": submission_id_for_file, "userId": upload_user_id},
+                            UpdateExpression="SET artifacts.files = :f",
+                            ExpressionAttributeValues={":f": new_files_list}
+                        )
+                    except Exception as db_err:
+                        print(f"Error updating global state: {db_err}")
                 except Exception as state_err:
                     print(f"Warning: Failed to update state for upload {file_name}: {state_err}")
                     # Non-blocking, continue to return URL
@@ -336,17 +357,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 try:
                     state_resp = state_table.get_item(Key={"submissionId": submission_id_for_file, "userId": upload_user_id})
                     if 'Item' in state_resp:
-                        # Depending on structure, artifacts might be a map or list. 
-                        # The upload logic appended to 'artifacts.files'.
                         current_files = state_resp['Item'].get('artifacts', {}).get('files', [])
-                        if file_name in current_files:
-                            current_files.remove(file_name)
-                            # Update the files list
+                        
+                        # Flexible matching: matches exact filename OR URI ending in /filename
+                        new_files = [f for f in current_files if f != file_name and not f.endswith("/" + file_name)]
+                        
+                        if len(new_files) < len(current_files):
+                            print(f"Removing {file_name} from DynamoDB artifacts list")
                             state_table.update_item(
                                 Key={"submissionId": submission_id_for_file, "userId": upload_user_id},
                                 UpdateExpression="SET artifacts.files = :files",
-                                ExpressionAttributeValues={":files": current_files}
+                                ExpressionAttributeValues={":files": new_files}
                             )
+                            current_files = new_files
                 except Exception as db_err:
                      print(f"Warning: Failed to update DynamoDB on delete: {db_err}")
 
@@ -413,20 +436,50 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 final_userId = user_id if user_id and user_id != 'null' else "anonymous"
                 config = {"configurable": {"thread_id": submission_id}}
                 
-                # Explicitly update graph state to match DynamoDB
-                # This ensures any manual status changes are reflected in LangGraph checkpoints
-                app.update_state(config, {"governance": {"status": "Under Review"}, "userId": final_userId}, as_node="support")
+                # Sync artifacts from DynamoDB to checkpoint so Librarian sees latest files
+                full_item = state_table.get_item(Key={"submissionId": submission_id, "userId": final_userId}).get("Item", {})
+                artifacts_from_db = full_item.get("artifacts", {})
                 
+                app.update_state(config, {
+                    "governance": {"status": "Under Review"}, 
+                    "userId": final_userId, 
+                    "artifacts": artifacts_from_db
+                }, as_node="support")
+                
+                # Pass trace callbacks 
+                from langfuse.langchain import CallbackHandler
+                langfuse_handler = CallbackHandler()
+                metadata = {
+                    "langfuse_session_id": submission_id,
+                    "langfuse_user_id": final_userId,
+                    "sessionId": submission_id
+                }
+
                 # Invoke to proceed from 'support'
-                result = app.invoke(None, config=config)
+                result = app.invoke(None, config={**config, "callbacks": [langfuse_handler], "metadata": metadata})
+                
+                # Sync results back to Global State table
+                if "submissionId" not in result: result["submissionId"] = submission_id
+                if "userId" not in result: result["userId"] = final_userId
+                
+                print(f"Updating Global State after revision: {submission_id} (Status: {result.get('governance', {}).get('status')})")
+                state_table.put_item(Item=result)
+
+                if hasattr(langfuse_handler, "client"):
+                    langfuse_handler.client.flush()
+                
+                # Enrich with pre-signed URLs for UI consistency
+                enriched_result = enrich_state_with_presigned_urls(result)
                 
                 return {
                     "statusCode": 200,
                     "headers": headers,
-                    "body": json.dumps({"message": "Revision submitted", "result": result}, default=str)
+                    "body": json.dumps({"message": "Revision submitted", "result": enriched_result}, default=str)
                 }
             except Exception as graph_err:
                  print(f"Graph invocation failed: {graph_err}")
+                 import traceback
+                 traceback.print_exc()
                  return {
                      "statusCode": 500, 
                      "headers": headers, 
@@ -897,35 +950,139 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "body": json.dumps(enriched_state, default=str)
             }
 
+        # --- PATH: /governance/override ---
+        elif "/governance/override" in path and method == "POST":
+            import boto3
+            from datetime import datetime, timezone
+            from aigu.utils import generate_audit_signature, get_current_user_identity
+            
+            dynamodb = boto3.resource('dynamodb')
+            state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+            
+            # SubId, NewStatus, NewRisk, Justification
+            body_str = event.get("body", "{}")
+            payload = json.loads(body_str) if isinstance(body_str, str) else body_str
+            target_id = payload.get("submissionId")
+            new_status = payload.get("newStatus")
+            new_risk = payload.get("newRiskLevel")
+            justification = payload.get("justification", "Manual Override")
+            target_user_id = payload.get("userId") 
+            
+            if not target_id:
+                return {
+                    "statusCode": 400, "headers": headers, "body": json.dumps({"error": "submissionId required"})
+                }
+
+            # --- AUDIT LOGGING ---
+            timestamp = datetime.now(timezone.utc).isoformat()
+            audit_entry = {
+                "timestamp": timestamp,
+                "agent": "Human Operator",
+                "action": "MANUAL_OVERRIDE",
+                "reason": justification,
+                "userIdentity": get_current_user_identity() # Mocked identity
+            }
+            # Generate signature
+            audit_entry["signature"] = generate_audit_signature(audit_entry)
+            
+            # 1. Get Item
+            if not target_user_id:
+                 # Fallback query
+                 from boto3.dynamodb.conditions import Key
+                 q_resp = state_table.query(KeyConditionExpression=Key('submissionId').eq(target_id))
+                 if q_resp.get('Items'):
+                     target_user_id = q_resp['Items'][0].get('userId')
+            
+            if not target_user_id:
+                return {"statusCode": 404, "headers": headers, "body": json.dumps({"error": "Project not found"})}
+
+            # 2. Update Item (Read-Modify-Write)
+            try:
+                print(f"Applying Manual Override to {target_id} (Status: {new_status})")
+                item_resp = state_table.get_item(Key={"submissionId": target_id, "userId": target_user_id})
+                item = item_resp.get("Item", {})
+                
+                if "governance" not in item: item["governance"] = {}
+                if "projectMetadata" not in item: item["projectMetadata"] = {}
+                # Ensure auditLog is a list
+                current_log = item.get("auditLog", [])
+                if not isinstance(current_log, list): current_log = []
+                
+                item["governance"]["status"] = new_status
+                if new_risk: item["projectMetadata"]["riskLevel"] = new_risk
+
+                # Add to log
+                current_log.append(audit_entry)
+                item["auditLog"] = current_log
+                
+                # Write Back
+                state_table.put_item(Item=item)
+                
+                return {
+                    "statusCode": 200,
+                    "headers": headers,
+                    "body": json.dumps({"success": True, "status": new_status, "auditEntry": audit_entry})
+                }
+            except Exception as e:
+                print(f"Error in manual override: {e}")
+                return {"statusCode": 500, "headers": headers, "body": json.dumps({"error": str(e)})}
+
+        # --- PATH: /config ---
         # --- PATH: /config ---
         elif "/config" in path:
             import boto3
             dynamodb = boto3.resource('dynamodb')
             config_table = dynamodb.Table(os.environ.get("CONFIG_TABLE_NAME", "AIGU_System_Config"))
             
+            # Extract agent ID from path if present (e.g. /config/risk_triage)
+            # Assumption: path structure is /config or /config/{agentId}
+            path_parts = path.split('/')
+            agent_id = path_parts[-1] if len(path_parts) > 2 and path_parts[-1] != 'config' else None
+            
             if method == "POST":
-                # Save config (e.g. modelId)
+                # Save config
+                if agent_id:
+                    # Agent Config Update
+                    config_type = "AGENT_CONFIG"
+                    config_id = agent_id
+                    print(f"Updating Agent Config: {agent_id}")
+                else:
+                    # System Config Update (Legacy/Global)
+                    config_type = "SYSTEM"
+                    config_id = "CORE"
+                    print("Updating System Core Config")
+
                 config_item = {
-                    "configType": "SYSTEM",
-                    "configId": "CORE",
+                    "configType": config_type,
+                    "configId": config_id,
                     "data": payload
                 }
                 config_table.put_item(Item=config_item)
-                # Re-bootstrap for current execution
-                load_system_config()
+                
+                # Re-bootstrap system if valid
+                if config_type == "SYSTEM":
+                    load_system_config()
+                    
                 return {
                     "statusCode": 200,
                     "headers": headers,
-                    "body": json.dumps({"status": "Configuration Updated", "activeModel": payload.get("novaModelId")})
+                    "body": json.dumps({"status": "Configuration Updated", "id": config_id})
                 }
             else:
                 # GET config
-                response = config_table.get_item(Key={"configType": "SYSTEM", "configId": "CORE"})
+                if agent_id:
+                    # Fetch specific agent config
+                    response = config_table.get_item(Key={"configType": "AGENT_CONFIG", "configId": agent_id})
+                    print(f"Fetching config for agent: {agent_id}")
+                else:
+                    # Fetch core system config
+                    response = config_table.get_item(Key={"configType": "SYSTEM", "configId": "CORE"})
+                
                 config_data = response.get("Item", {}).get("data", {})
                 return {
                     "statusCode": 200,
                     "headers": headers,
-                    "body": json.dumps(config_data)
+                    "body": json.dumps(config_data, default=str)
                 }
 
         # --- PATH: /models ---
@@ -998,6 +1155,46 @@ def enrich_state_with_presigned_urls(state: Dict[str, Any]) -> Dict[str, Any]:
         **(state.get("ui_overlay", {}) or {}),
         "reasoningUrls": reasoning_urls
     }
+    
+    # 2. Enrich Project Files in artifacts.files
+    artifacts = state.get("artifacts", {})
+    files = artifacts.get("files", [])
+    submission_id = state.get("submissionId")
+    user_id = state.get("userId")
+    bucket_name = os.environ.get('ARTIFACT_BUCKET', 'aigu-artifacts')
+    
+    # If it's a list, process each file
+    if isinstance(files, list):
+        enriched_files = []
+        for f in files:
+            file_uri = f
+            # Reconstruct legacy URI if missing
+            if isinstance(f, str) and not f.startswith("s3://") and submission_id and user_id:
+                file_uri = f"s3://{bucket_name}/uploads/{user_id}/{submission_id}/{f}"
+            
+            # Now process the URI (either original or reconstructed)
+            target_path = file_uri.get("uri") if isinstance(file_uri, dict) else file_uri
+            
+            if isinstance(target_path, str) and target_path.startswith("s3://"):
+                try:
+                    parts = target_path.replace("s3://", "").split("/", 1)
+                    if len(parts) == 2:
+                        bucket, key = parts
+                        filename = key.split("/")[-1]
+                        url = s3.generate_presigned_url(
+                            'get_object',
+                            Params={'Bucket': bucket, 'Key': key},
+                            ExpiresIn=3600
+                        )
+                        enriched_files.append({"name": filename, "presignedUrl": url, "uri": target_path})
+                except Exception as e:
+                    print(f"Warning: Failed to sign artifact {target_path}: {e}")
+            elif isinstance(f, dict): # Already enriched?
+                enriched_files.append(f)
+        
+        # Update the state with enriched files
+        artifacts["files"] = enriched_files
+    
     return state
 
 def load_system_config():

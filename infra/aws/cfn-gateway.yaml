@@ -282,23 +282,38 @@ Resources:
           - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
           - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
 
+  # /config
   ConfigResource:
     Type: AWS::ApiGateway::Resource
     Properties:
-      RestApiId: !Ref AIGUApiGateway
       ParentId: !GetAtt AIGUApiGateway.RootResourceId
       PathPart: config
+      RestApiId: !Ref AIGUApiGateway
 
-  ConfigMethodIAM:
+  ConfigMethodGET:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref AIGUApiGateway
+      AuthorizationType: NONE
+      HttpMethod: GET
       ResourceId: !Ref ConfigResource
-      HttpMethod: ANY
-      AuthorizationType: AWS_IAM
+      RestApiId: !Ref AIGUApiGateway
       Integration:
-        Type: AWS_PROXY
         IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  ConfigMethodPOST:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref ConfigResource
+      RestApiId: !Ref AIGUApiGateway
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
         Uri: !Sub 
           - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
           - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
@@ -306,16 +321,99 @@ Resources:
   ConfigOptionsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref AIGUApiGateway
-      ResourceId: !Ref ConfigResource
-      HttpMethod: OPTIONS
       AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref ConfigResource
+      RestApiId: !Ref AIGUApiGateway
       Integration:
-        Type: AWS_PROXY
         IntegrationHttpMethod: POST
+        Type: AWS_PROXY
         Uri: !Sub 
           - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
           - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+  
+  # /config/{agent}
+  ConfigAgentResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ConfigResource
+      PathPart: '{agent}'
+      RestApiId: !Ref AIGUApiGateway
+
+  ConfigAgentMethodGET:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref ConfigAgentResource
+      RestApiId: !Ref AIGUApiGateway
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  ConfigAgentMethodPOST:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref ConfigAgentResource
+      RestApiId: !Ref AIGUApiGateway
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  ConfigAgentOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref ConfigAgentResource
+      RestApiId: !Ref AIGUApiGateway
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  # /governance/override
+  GovernanceResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt AIGUApiGateway.RootResourceId
+      PathPart: governance
+      RestApiId: !Ref AIGUApiGateway
+
+  GovernanceOverrideResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref GovernanceResource
+      PathPart: override
+      RestApiId: !Ref AIGUApiGateway
+
+  GovernanceOverrideMethodPOST:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref GovernanceOverrideResource
+      RestApiId: !Ref AIGUApiGateway
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  # Old Config Resource Start (to be replaced)
+
+  # Old Config Resources Removed for V11 Upgrade
 
   ModelsResource:
     Type: AWS::ApiGateway::Resource
@@ -489,8 +587,8 @@ Resources:
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AIGUApiGateway}/*/*/*'
 
 
-  # 5. Deployment (New Logical ID V11 to force redeploy with new endpoints)
-  AIGUApiDeploymentV11:
+  # 5. Deployment (New Logical ID V13 to force redeploy with new endpoints)
+  AIGUApiDeploymentV13:
     Type: AWS::ApiGateway::Deployment
     DependsOn: 
       - InvokeMethodIAM
@@ -508,8 +606,6 @@ Resources:
       - SupportAskOptionsMethod
       - AdminListMethodIAM
       - AdminListOptionsMethod
-      - ConfigMethodIAM
-      - ConfigOptionsMethod
       - ModelsMethodIAM
       - ModelsOptionsMethod
       - DeltaMethodIAM
@@ -518,18 +614,25 @@ Resources:
       - SessionsOptionsMethod
       - SubmitRevisionMethodIAM
       - SubmitRevisionOptionsMethod
+      - ConfigMethodGET
+      - ConfigMethodPOST
+      - ConfigOptionsMethod
+      - ConfigAgentMethodGET
+      - ConfigAgentMethodPOST
+      - ConfigAgentOptionsMethod
+      - GovernanceOverrideMethodPOST
       - GatewayResponse4XX
       - GatewayResponse5XX
     Properties:
       RestApiId: !Ref AIGUApiGateway
-      Description: Add DELETE /upload and POST /submit-revision
-
+      Description: Add Options methods for Config
+ 
   AIGUApiStage:
     Type: AWS::ApiGateway::Stage
     Properties:
       StageName: v1
       RestApiId: !Ref AIGUApiGateway
-      DeploymentId: !Ref AIGUApiDeploymentV11
+      DeploymentId: !Ref AIGUApiDeploymentV13
 
 Outputs:
   ApiEndpoint:

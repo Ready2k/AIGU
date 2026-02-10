@@ -5,47 +5,47 @@ import { getCredentials, signRequest } from '../utils/auth';
 const API_URL = 'https://7rhp69zmfh.execute-api.us-east-1.amazonaws.com/v1';
 const DEV_MODE = true;
 
+// Helper: Signed Fetch Wrapper
+export const signedFetch = async (endpoint, options = {}) => {
+    const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
+    const method = options.method || 'GET';
+    let headers = { ...options.headers };
+
+    // console.log(`signedFetch: ${method} ${url}`);
+
+    if (DEV_MODE) {
+        const creds = await getCredentials();
+        if (creds) {
+            const signedHeaders = await signRequest(url, method, options.body, creds);
+            headers = { ...headers, ...signedHeaders };
+        }
+    }
+
+    const response = await fetch(url, { ...options, headers });
+    // console.log(`signedFetch response: ${response.status} ${response.statusText}`);
+
+    if (!response.ok) {
+        const txt = await response.text();
+        throw new Error(`API Error: ${response.status} - ${txt}`);
+    }
+    // Handle text response (Reasoning CoT) vs JSON (State)
+    const contentType = response.headers.get("content-type");
+    console.log(`signedFetch contentType: ${contentType}`);
+
+    if (contentType && contentType.includes("application/json")) {
+        const json = await response.json();
+        // console.log(`signedFetch JSON result:`, json);
+        return json;
+    }
+    const text = await response.text();
+    // console.log(`signedFetch text result:`, text);
+    return text;
+};
+
 export const useAiguState = (submissionId, userId) => {
     const [globalState, setGlobalState] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-
-    // Helper: Signed Fetch Wrapper
-    const signedFetch = useCallback(async (endpoint, options = {}) => {
-        const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
-        const method = options.method || 'GET';
-        let headers = { ...options.headers };
-
-        // console.log(`signedFetch: ${method} ${url}`);
-
-        if (DEV_MODE) {
-            const creds = await getCredentials();
-            if (creds) {
-                const signedHeaders = await signRequest(url, method, options.body, creds);
-                headers = { ...headers, ...signedHeaders };
-            }
-        }
-
-        const response = await fetch(url, { ...options, headers });
-        // console.log(`signedFetch response: ${response.status} ${response.statusText}`);
-
-        if (!response.ok) {
-            const txt = await response.text();
-            throw new Error(`API Error: ${response.status} - ${txt}`);
-        }
-        // Handle text response (Reasoning CoT) vs JSON (State)
-        const contentType = response.headers.get("content-type");
-        console.log(`signedFetch contentType: ${contentType}`);
-
-        if (contentType && contentType.includes("application/json")) {
-            const json = await response.json();
-            // console.log(`signedFetch JSON result:`, json);
-            return json;
-        }
-        const text = await response.text();
-        // console.log(`signedFetch text result:`, text);
-        return text;
-    }, []);
 
     // 1. Fetch State
     const fetchState = useCallback(async () => {
@@ -273,7 +273,9 @@ export const useAiguState = (submissionId, userId) => {
                 fetchState(); // Fallback if full state isn't returned
             }
         } catch (err) {
+            console.error("submitRevision failed", err);
             setError(err);
+            throw err; // Re-throw to allow component to handle/alert
         } finally {
             setLoading(false);
         }

@@ -13,14 +13,31 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     path = project_metadata.get("path", "Stop")
     submission_id = state.get("submissionId", "unknown")
 
-    # 1. Invoke Amazon Nova for Intelligent Risk Analysis
-    print(f"Risk: Invoking Amazon Nova for project risk triage.")
+    # 1. Fetch Dynamic Config
+    import boto3
+    import os
+    dynamodb = boto3.resource('dynamodb')
+    config_table = dynamodb.Table(os.environ.get("CONFIG_TABLE_NAME", "AIGU_System_Config"))
+    
+    risk_config = {}
+    try:
+        resp = config_table.get_item(Key={"configType": "AGENT_CONFIG", "configId": "risk_triage"})
+        risk_config = resp.get("Item", {}).get("data", {})
+    except Exception as e:
+        print(f"Warning: Failed to fetch Risk Config: {e}")
+
+    high_risk_keywords = risk_config.get("high_risk_keywords", [])
+    sla_map = risk_config.get("sla_days", {"High": 10, "Medium": 5, "Low": 3})
+
+    # 2. Invoke Amazon Nova for Intelligent Risk Analysis
+    print(f"Risk: Invoking Amazon Nova for project risk triage. Active Keywords: {len(high_risk_keywords)}")
     
     try:
         prompt_tmpl = get_active_prompt("risk-triage", tag="production")
         system_prompt = prompt_tmpl.compile(
             path=path,
-            description=description
+            description=description,
+            high_risk_keywords=high_risk_keywords # Inject keywords into prompt context
         )
     except Exception as e:
         print(f"Error loading prompt 'risk-triage': {e}")
@@ -29,16 +46,23 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     
     analysis = query_nova_json(
         prompt_name="risk-triage",  # Use LangFuse prompt
-        user_prompt=f"Path: {path}\nProject Description: {description}",
+        user_prompt=f"Path: {path}\nProject Description: {description}\nHigh Risk Keywords to Flag: {high_risk_keywords}",
         expected_keys=["riskLevel", "slaDays", "thoughtProcess"],
         state=state  # Pass full state for variable substitution
     )
 
     risk_level = analysis.get("riskLevel", "Low")
-    sla_days = analysis.get("slaDays", 3)
+    
+    # Use Dynamic SLA from Config if available, else fallback to Model or Default
+    config_sla = sla_map.get(risk_level)
+    if config_sla:
+        sla_days = int(config_sla)
+    else:
+        sla_days = analysis.get("slaDays", 3)
+        
     thought_process = analysis.get("thoughtProcess", "Step-by-step risk analysis carried out.")
 
-    # 2. State & SLA Logic
+    # 3. State & SLA Logic
     deadline_date = datetime.now(timezone.utc) + timedelta(days=sla_days)
     sla_deadline_str = deadline_date.date().isoformat()
     

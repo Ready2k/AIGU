@@ -3,6 +3,7 @@ import { View, Text, SafeAreaView, TextInput, TouchableOpacity, StyleSheet, Plat
 import { getShadow } from './utils/shadows';
 import Dashboard from './screens/Dashboard';
 import AdminDashboard from './screens/AdminDashboard';
+import AgentCockpit from './screens/AgentCockpit';
 import DevConsole from './screens/DevConsole';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useAiguTheme } from './theme/ThemeContext';
@@ -71,6 +72,33 @@ function AppContent() {
                     </TouchableOpacity>
                 </View>
             </View>
+        );
+    }
+
+    // Agent Cockpit Roles (Mock Route based on User ID)
+    const isRiskOfficer = userId.toLowerCase().includes('risk');
+    const isLibrarian = userId.toLowerCase().includes('librarian');
+
+    if (isRiskOfficer || isLibrarian) {
+        const role = isRiskOfficer ? 'risk_triage' : 'librarian';
+        // Mock Navigation prop
+        const navigation = {
+            navigate: (screen) => console.log(`Navigating to ${screen}`)
+        };
+
+        return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+                <AgentCockpit
+                    route={{ params: { role } }}
+                    navigation={navigation}
+                />
+                <TouchableOpacity
+                    style={{ position: 'absolute', top: 40, right: 20, zIndex: 100 }}
+                    onPress={handleLogout}
+                >
+                    <Text style={{ color: theme.colors.textSecondary }}>Logout</Text>
+                </TouchableOpacity>
+            </SafeAreaView>
         );
     }
 

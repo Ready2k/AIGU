@@ -26,11 +26,28 @@ def librarian_audit_handler(state: Dict[str, Any]) -> Dict[str, Any]:
     # (Assuming state has the S3 bucket info or files are full URIs)
     # If they are just filenames, we need to know the bucket.
     # For this implementation, we assume files are full S3 URIs or we'll skip if not.
-    for file_path in files:
-        if file_path.startswith("s3://"):
+    bucket_name = os.environ.get('ARTIFACT_BUCKET', 'aigu-artifacts')
+    submission_id = state.get("submissionId", "unknown")
+    user_id = state.get("userId", "anonymous")
+
+    for file_info in files:
+        # Support both raw URIs (strings) and enriched objects (dicts)
+        file_path = file_info.get("uri") if isinstance(file_info, dict) else file_info
+        
+        # If it's a simple filename, reconstruct the expected S3 URI
+        if isinstance(file_path, str) and not file_path.startswith("s3://") and not file_path.startswith("http"):
+             # Format: s3://{bucket}/uploads/{userId}/{submissionId}/{filename}
+             original_filename = file_path
+             file_path = f"s3://{bucket_name}/uploads/{user_id}/{submission_id}/{original_filename}"
+             print(f"Librarian: Reconstructed URI for legacy file {original_filename} -> {file_path}")
+
+        if isinstance(file_path, str) and file_path.startswith("s3://"):
+             print(f"Librarian: Extracting content from {file_path}")
              text = extractor.extract(file_path)
              filename = file_path.split("/")[-1]
              extracted_results["files"][filename] = text
+        else:
+             print(f"Librarian Warning: Skipping file extraction for {file_path} - invalid format or missing s3:// prefix")
 
     # 2. Extract from Links in Intake/Tech Design
     # Scan for URLs in specific fields

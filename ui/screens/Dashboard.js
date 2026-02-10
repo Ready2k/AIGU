@@ -33,7 +33,7 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
     const [searchQuery, setSearchQuery] = useState('');
 
     // UI State
-    const [showLogs, setShowLogs] = useState(false);
+    const [showLogs, setShowLogs] = useState(true); // Default to true for debugging
     const [isRemediating, setIsRemediating] = useState(false);
     const [supportPanelOpen, setSupportPanelOpen] = useState(true);
     const [filePanelOpen, setFilePanelOpen] = useState(true);
@@ -371,7 +371,7 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                         </View>
                     )}
 
-                    {status === 'Blocked' && (
+                    {(status === 'Blocked' || activeState.projectMetadata?.missingArtifacts?.length > 0) && (
                         <View style={{ marginTop: 24, padding: 20, borderRadius: 8, backgroundColor: theme.mode === 'dark' ? '#322d1c' : '#FFF9EB', borderLeftWidth: 4, borderLeftColor: theme.colors.warning }}>
                             <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, fontWeight: '700', marginBottom: 8 }}>
                                 ACTION REQUIRED: Re-Submission
@@ -380,12 +380,21 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                                 Once you have addressed the blockers and updated any necessary artifacts, click below to re-submit your project for evaluation.
                             </Text>
                             <TouchableOpacity
-                                style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
+                                style={[styles.actionButton, { backgroundColor: theme.colors.primary, opacity: liveLoading ? 0.7 : 1 }]}
+                                disabled={liveLoading}
                                 onPress={async () => {
-                                    await liveActions.submitRevision();
+                                    try {
+                                        await liveActions.submitRevision();
+                                    } catch (e) {
+                                        alert("Submission failed: " + e.message);
+                                    }
                                 }}
                             >
-                                <Text style={{ color: '#FFF', fontWeight: '700' }}>🚀 SUBMIT REVISION</Text>
+                                {liveLoading ? (
+                                    <ActivityIndicator color="#FFF" />
+                                ) : (
+                                    <Text style={{ color: '#FFF', fontWeight: '700' }}>🚀 SUBMIT REVISION</Text>
+                                )}
                             </TouchableOpacity>
                         </View>
                     )}
@@ -474,15 +483,22 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                     )}
                 </ScrollView>
 
-                <View style={styles.sidebarFooter}>
-                    <View style={[styles.userBadge, { backgroundColor: theme.colors.background }]}>
+                <View style={[styles.sidebarFooter, { flexDirection: 'column', gap: 8, alignItems: 'stretch' }]}>
+                    <View style={[styles.userBadge, { backgroundColor: theme.colors.background, alignSelf: 'flex-start' }]}>
                         <Text style={{ color: theme.colors.textPrimary, fontSize: 11, fontWeight: '700' }}>
                             {userId}
                         </Text>
                     </View>
-                    <TouchableOpacity onPress={onLogout}>
-                        <Text style={{ color: theme.colors.error, fontSize: 11, fontWeight: '700' }}>LOGOUT</Text>
-                    </TouchableOpacity>
+
+                    <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 4 }}>Dev Role Switcher:</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <TouchableOpacity onPress={() => window.location.reload()} style={{ padding: 4 }}>
+                            <Text style={{ color: theme.colors.primary, fontSize: 10 }}>User</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={onLogout} style={{ padding: 4 }}>
+                            <Text style={{ color: theme.colors.error, fontSize: 10 }}>Logout</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
 
@@ -515,19 +531,27 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                         />
 
                         {/* REMEDIATION ACTION */}
-                        {activeState.governance?.status === 'Blocked' && (
+                        {(activeState.governance?.status === 'Blocked' || activeState.projectMetadata?.missingArtifacts?.length > 0) && (
                             <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 16 }}>
                                 <Text style={{ ...theme.typography.body, color: theme.colors.error, marginBottom: 8 }}>
                                     Your project is blocked. Please address the issues above, manage your files, then click below to re-submit for review.
                                 </Text>
                                 <TouchableOpacity
-                                    style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
+                                    style={[styles.actionButton, { backgroundColor: theme.colors.primary, opacity: liveLoading ? 0.7 : 1 }]}
+                                    disabled={liveLoading}
                                     onPress={async () => {
-                                        await liveActions.submitRevision();
-                                        // Ideally, trigger a refresh/poll or optimistically update
+                                        try {
+                                            await liveActions.submitRevision();
+                                        } catch (e) {
+                                            alert("Submission failed: " + e.message);
+                                        }
                                     }}
                                 >
-                                    <Text style={{ color: '#FFF', fontWeight: '700' }}>🚀 SUBMIT REVISION for RE-EVALUATION</Text>
+                                    {liveLoading ? (
+                                        <ActivityIndicator color="#FFF" />
+                                    ) : (
+                                        <Text style={{ color: '#FFF', fontWeight: '700' }}>🚀 SUBMIT REVISION for RE-EVALUATION</Text>
+                                    )}
                                 </TouchableOpacity>
                             </View>
                         )}
@@ -687,7 +711,7 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     filePanel: {
-        height: 200,
+        height: 350,
         borderTopWidth: 1,
         padding: 16
     },

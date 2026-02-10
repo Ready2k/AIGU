@@ -17,72 +17,99 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     risk_level = project_metadata.get("riskLevel", "Low")
     submission_id = state.get("submissionId", "unknown")
     
-    # 1. Invoke Upgraded Librarian Service for Extraction & Audit
+    # 1. Fetch Dynamic Config
+    import boto3
+    import os
+    dynamodb = boto3.resource('dynamodb')
+    config_table = dynamodb.Table(os.environ.get("CONFIG_TABLE_NAME", "AIGU_System_Config"))
+    
+    librarian_config = {}
+    try:
+        resp = config_table.get_item(Key={"configType": "AGENT_CONFIG", "configId": "librarian"})
+        librarian_config = resp.get("Item", {}).get("data", {})
+    except Exception as e:
+        print(f"Warning: Failed to fetch Librarian Config: {e}")
+        
+    config_required_artifacts = librarian_config.get("required_artifacts", {})
+
+    # 2. Determine Required Artifacts based on Risk Level
+    dynamic_reqs = config_required_artifacts.get(risk_level)
+    if dynamic_reqs:
+        required_artifacts = dynamic_reqs
+    else:
+        # Fallback Hardcoded Defaults
+        required_artifacts = ["intakeData", "technicalDesign"]
+        if risk_level == "Medium":
+            required_artifacts.append("complianceStatus")
+        elif risk_level == "High":
+            required_artifacts.extend(["complianceStatus", "securityReview", "dataFlowDiagram"])
+
+    # 3. Invoke Upgraded Librarian Service for Extraction
     from services.librarian.main import librarian_audit_handler
     
     print(f"Librarian: Running Unified Extractor for artifacts and links.")
     audit_results = librarian_audit_handler(state)
     audit_context = audit_results.get("librarian_context", "No additional document context extracted.")
     
-    # 2. Invoke Amazon Nova for Intelligent Consolidation
-    print(f"Librarian: Invoking Amazon Nova for artifact consolidation.")
+    # 4. Invoke Amazon Nova for Intelligent Categorization
+    print(f"Librarian: Invoking Amazon Nova to map content to required artifacts: {required_artifacts}")
     
     user_prompt = f"""
-    Risk Level: {risk_level}
-    Intake Data: {intake_data}
-    Existing technicalDesign: {tech_design}
+    The project is at a {risk_level} risk level.
+    The following artifacts are REQUIRED: {', '.join(required_artifacts)}
     
-    --- EXTRACTED CONTENT FROM FILES & LINKS ---
+    CURRENT INTAKE DATA:
+    {intake_data}
+    
+    --- EXTRACTED CONTENT FROM UPLOADED FILES & LINKS ---
     {audit_context}
+    
+    --- TASK ---
+    1. Analyze the extracted content.
+    2. Map the content to the REQUIRED artifacts listed above.
+    3. If content for an artifact (like 'technicalDesign' or 'securityReview') is found in the documents, summarize/extract it into that field.
+    4. If no clear content is found for a required artifact, return an empty string or "Not Found" for that field.
+    5. 'intakeData' should reflect the latest understanding, merged with new details.
     """
+    
+    # We want the LLM to return exactly the fields we need
+    expected_keys = required_artifacts + ["actionsTaken", "thoughtProcess"]
     
     analysis = query_nova_json(
         prompt_name="librarian_agent",
         user_prompt=user_prompt,
-        expected_keys=["updatedTechnicalDesign", "actionsTaken", "thoughtProcess", "missingSections"],
+        expected_keys=expected_keys,
         state=state
     )
 
-
-    updated_tech_design = analysis.get("updatedTechnicalDesign", tech_design)
-    actions_taken = analysis.get("actionsTaken", ["Routine deduplication check."])
-    thought_process = analysis.get("thoughtProcess", "Step-by-step consolidation carried out.")
-    missing_sections = analysis.get("missingSections", [])
-
-    # 2. Artifact Management (Logic 3 in spec)
+    # 5. Process Results & Update State
     new_artifacts = artifacts.copy()
-    new_artifacts["technicalDesign"] = updated_tech_design
+    actions_taken = analysis.get("actionsTaken", ["Routine document analysis."])
+    thought_process = analysis.get("thoughtProcess", "AI-driven content mapping performed.")
     
-    if risk_level == "High" and "complianceStatus" not in new_artifacts:
-        new_artifacts["complianceStatus"] = []
-        actions_taken.append("Initialized Compliance Status for High Risk context.")
+    missing_artifacts = []
+    for art in required_artifacts:
+        content = analysis.get(art)
+        if content and content != "Not Found" and len(str(content)) > 50:
+            new_artifacts[art] = content
+            print(f"Librarian: Identified content for {art}")
+        else:
+            if art not in new_artifacts or not new_artifacts.get(art):
+                missing_artifacts.append(art)
+                print(f"Librarian: Missing content for {art}")
 
-    # 3. Artifact Validation (NEW)
-    # Define required artifacts based on risk level
-    required_artifacts = ["intakeData", "technicalDesign"]
-    if risk_level == "Medium":
-        required_artifacts.append("complianceStatus")
-    elif risk_level == "High":
-        required_artifacts.extend(["complianceStatus", "securityReview", "dataFlowDiagram"])
-    
-    # Check for missing artifacts
-    missing_artifacts = [
-        art for art in required_artifacts 
-        if art not in new_artifacts or not new_artifacts.get(art)
-    ]
     artifacts_valid = len(missing_artifacts) == 0
-    
     print(f"Librarian: Artifact validation - Valid: {artifacts_valid}, Missing: {missing_artifacts}")
 
-    # 4. Persistence & Audit
+    # 6. Persistence & Audit
     s3_uri = upload_reasoning_to_s3(submission_id, "Gov Librarian", thought_process)
 
     timestamp = datetime.now(timezone.utc).isoformat()
     raw_entry = {
         "timestamp": timestamp,
         "agent": "Gov Librarian",
-        "action": "Artifact Consolidation & Validation",
-        "reason": f"Actions: {'; '.join(actions_taken)}. Artifacts Valid: {artifacts_valid}",
+        "action": "Content-Aware Artifact Validation",
+        "reason": f"Analyzed uploaded docs. Artifacts Valid: {artifacts_valid}. missing: {missing_artifacts}",
         "reasoningContext": s3_uri,
         "userIdentity": get_current_user_identity()
     }
@@ -92,20 +119,17 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     new_audit_log = state.get("auditLog", []).copy()
     new_audit_log.append(audit_entry)
     
-    # Update project metadata with validation results
+    # Update project metadata
     new_project_metadata = project_metadata.copy()
     new_project_metadata["artifactsValid"] = artifacts_valid
     new_project_metadata["missingArtifacts"] = missing_artifacts
     
-    # 5. Handle Rejection (Block) if artifacts are missing
+    # 7. Handle Rejection (Block) if artifacts are missing
     new_governance = state.get("governance", {}).copy()
     if not artifacts_valid:
-        print(f"Librarian: Rejecting project {submission_id} due to missing artifacts: {missing_artifacts}")
+        print(f"Librarian: Rejecting project {submission_id} due to missing content for: {missing_artifacts}")
         new_governance["status"] = "Blocked"
-        existing_blockers = new_governance.get("blockers", [])
-        # Avoid duplicate blockers
-        new_blockers = list(set(existing_blockers + [f"Missing Artifact: {art}" for art in missing_artifacts]))
-        new_governance["blockers"] = new_blockers
+        new_governance["blockers"] = [f"Missing Content: {art}" for art in missing_artifacts]
     
     return {
         "artifacts": new_artifacts, 

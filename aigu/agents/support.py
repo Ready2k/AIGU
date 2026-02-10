@@ -82,7 +82,7 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
     # Extract technical approach details from artifacts
     tech_design = artifacts.get('technicalDesign', {})
     technical_approach = ""
-    if tech_design:
+    if isinstance(tech_design, dict):
         # Build a summary of key technical details
         tech_parts = []
         if tech_design.get('securityMeasures'):
@@ -92,6 +92,8 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
         if tech_design.get('dataFlow'):
             tech_parts.append(f"Data Flow: {tech_design.get('dataFlow')}")
         technical_approach = "; ".join(tech_parts) if tech_parts else "Not yet specified"
+    elif isinstance(tech_design, str):
+        technical_approach = tech_design[:500] # Truncate for prompt efficiency
     else:
         technical_approach = "Not yet specified"
     
