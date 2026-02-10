@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
+import AttachmentManager from '../components/AttachmentManager';
 import { getShadow } from '../utils/shadows';
 
 /**
@@ -9,9 +10,10 @@ import { getShadow } from '../utils/shadows';
  * 
  * Handles multi-stage artifact submission for POC and Production phases.
  */
-const LifecycleSubmission = ({ stage, state, actions }) => {
+const LifecycleSubmission = ({ stage, state, actions, files, onUploadSuccess, userId }) => {
     const { theme } = useAiguTheme();
     const isPOC = stage === 'POC';
+    const isBlocked = state.governance?.status === 'Blocked';
 
     // POC State
     const [testPlan, setTestPlan] = useState('');
@@ -26,21 +28,27 @@ const LifecycleSubmission = ({ stage, state, actions }) => {
     const [outcomeReport, setOutcomeReport] = useState('');
     const [prevVersion, setPrevVersion] = useState(state.projectMetadata?.previousVersionId || '');
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
+        // 1. Submit Data Update
         if (isPOC) {
-            actions.submitPOC({
+            await actions.submitPOC({
                 testPlan,
                 successCriteria,
                 resourceEstimate,
                 technicalApproach: techApproach
             });
         } else {
-            actions.submitProduction({
+            await actions.submitProduction({
                 kpiMetrics: { summary: kpiMetrics },
                 costAnalysis: { summary: costAnalysis },
                 incrementalRisk,
                 outcomeReport
             }, prevVersion);
+        }
+
+        // 2. If Blocked -> Trigger Revision Workflow
+        if (isBlocked && actions.submitRevision) {
+            await actions.submitRevision();
         }
     };
 
@@ -175,13 +183,33 @@ const LifecycleSubmission = ({ stage, state, actions }) => {
                         Submission ID: {state.submissionId} | Lifecycle Phase: {stage}
                     </Text>
 
+                    {isBlocked && (
+                        <View style={{ marginBottom: 24, padding: 16, backgroundColor: theme.colors.background, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.error }}>
+                            <Text style={{ color: theme.colors.error, fontWeight: '700', marginBottom: 8 }}>⚠️ REMEDIATION REQUIRED</Text>
+                            <Text style={{ color: theme.colors.textPrimary, marginBottom: 12 }}>
+                                Please update your submission artifacts and form data to address the blockers identified by the review team.
+                            </Text>
+                            <Text style={{ fontWeight: '600', marginBottom: 8, color: theme.colors.textSecondary }}>Manage Artifacts:</Text>
+                            <AttachmentManager
+                                submissionId={state.submissionId}
+                                userId={userId}
+                                files={files}
+                                onUploadSuccess={onUploadSuccess}
+                                onDelete={actions.deleteArtifact}
+                                getUploadUrl={actions.getUploadUrl}
+                            />
+                        </View>
+                    )}
+
                     {isPOC ? renderPOCFields() : renderProductionFields()}
 
                     <TouchableOpacity
-                        style={[styles.submitButton, { backgroundColor: theme.colors.primary }]}
+                        style={[styles.submitButton, { backgroundColor: isBlocked ? theme.colors.warning : theme.colors.primary }]}
                         onPress={handleSubmit}
                     >
-                        <Text style={styles.submitButtonText}>SUBMIT ARTIFACTS TO GIGC</Text>
+                        <Text style={styles.submitButtonText}>
+                            {isBlocked ? 'UPDATE & SUBMIT REVISION' : 'SUBMIT ARTIFACTS TO GIGC'}
+                        </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity

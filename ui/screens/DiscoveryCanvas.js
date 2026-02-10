@@ -3,8 +3,9 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView 
 import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
 import { getShadow } from '../utils/shadows';
+import AttachmentManager from '../components/AttachmentManager';
 
-const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, setRemediating, projectMetadata = {}, governance = {}, onDraftUpdate }) => {
+const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, setRemediating, projectMetadata = {}, governance = {}, files, onUploadSuccess, onDraftUpdate }) => {
     const { theme } = useAiguTheme();
     const [description, setDescription] = useState(initialData.description || '');
     const [submitting, setSubmitting] = useState(false);
@@ -117,6 +118,12 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
                 ...formData,
                 description: description.trim()
             });
+
+            // If this was a remediation for a blocked project, trigger the revision loop
+            if (isRemediation && actions.submitRevision) {
+                await actions.submitRevision();
+            }
+
             if (setRemediating) setRemediating(false);
         } catch (error) {
             console.error('Failed to submit intake:', error);
@@ -133,6 +140,21 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
                     <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, marginBottom: theme.spacing.md }}>
                         {isRemediation ? '🛠️ Project Remediation' : 'Discovery Canvas'}
                     </Text>
+
+                    {/* ADD FILE MANAGER FOR REMEDIATION */}
+                    {isRemediation && (
+                        <View style={{ marginBottom: 20, padding: 16, backgroundColor: theme.colors.background, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.primary }}>
+                            <Text style={{ fontWeight: '700', color: theme.colors.primary, marginBottom: 8 }}>📎 Manage Supporting Documents</Text>
+                            <AttachmentManager
+                                submissionId={projectMetadata.submissionId}
+                                userId={projectMetadata.userId}
+                                files={files}
+                                onUploadSuccess={onUploadSuccess}
+                                onDelete={actions.deleteArtifact}
+                                getUploadUrl={actions.getUploadUrl}
+                            />
+                        </View>
+                    )}
 
                     {validationErrors.length > 0 && (
                         <View style={[styles.errorBox, { borderColor: theme.colors.error }]}>
@@ -246,7 +268,7 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
                             disabled={submitting || isGateClosed}
                         >
                             <Text style={styles.buttonText}>
-                                {isGateClosed ? 'COMPLETE REQUIRED FIELDS' : (submitting ? 'PROCESSING...' : 'SUBMIT TO AIGU')}
+                                {isGateClosed ? 'COMPLETE REQUIRED FIELDS' : (submitting ? 'PROCESSING...' : (isRemediation ? 'UPDATE & RESUBMIT' : 'SUBMIT TO AIGU'))}
                             </Text>
                         </TouchableOpacity>
                     </View>

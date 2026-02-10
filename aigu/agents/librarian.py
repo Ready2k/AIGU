@@ -4,22 +4,7 @@ from aigu.state import GlobalState, AuditLogEntry
 from aigu.utils import upload_reasoning_to_s3, generate_audit_signature, get_current_user_identity
 from aigu.llm import query_nova_json
 
-LIBRARIAN_SYSTEM_PROMPT = """
-You are the AIGU Governance Librarian. Your role is to consolidate project information into a 'technicalDesign' artifact while eliminating redundancy.
-
-Responsibilities:
-1. Deduplication: Identify information in 'intakeData' that should be 'promoted' to the 'technicalDesign' Single Source of Truth if it's missing or more detailed.
-2. Technical Gap Analysis: For Medium or High risk projects, check if the project has sufficient technical detail (e.g., DataFlow, IAM configuration, or specific architectural patterns).
-3. Consistency: Ensure the project name and basic scope are consistent across all artifacts.
-
-Input will include 'intakeData', 'technicalDesign', and 'projectMetadata' (Risk Level).
-
-JSON Structure Required:
-- updatedTechnicalDesign: Object (The merged Single Source of Truth)
-- missingSections: List of Strings (Any technical gaps identified)
-- actionsTaken: List of Strings (Specific changes made)
-- thoughtProcess: String (Detailed analysis)
-"""
+# LangFuse Prompt: librarian_agent
 
 def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     """
@@ -112,8 +97,19 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     new_project_metadata["artifactsValid"] = artifacts_valid
     new_project_metadata["missingArtifacts"] = missing_artifacts
     
+    # 5. Handle Rejection (Block) if artifacts are missing
+    new_governance = state.get("governance", {}).copy()
+    if not artifacts_valid:
+        print(f"Librarian: Rejecting project {submission_id} due to missing artifacts: {missing_artifacts}")
+        new_governance["status"] = "Blocked"
+        existing_blockers = new_governance.get("blockers", [])
+        # Avoid duplicate blockers
+        new_blockers = list(set(existing_blockers + [f"Missing Artifact: {art}" for art in missing_artifacts]))
+        new_governance["blockers"] = new_blockers
+    
     return {
         "artifacts": new_artifacts, 
         "auditLog": new_audit_log,
-        "projectMetadata": new_project_metadata
+        "projectMetadata": new_project_metadata,
+        "governance": new_governance
     }

@@ -4,11 +4,11 @@ import { useAiguTheme } from '../theme/ThemeContext';
 import { useAiguState } from '../hooks/useAiguState';
 import SupportAgent from '../components/SupportAgent';
 import WorkflowProgress from '../components/WorkflowProgress';
-import FileManager from '../components/FileManager';
 import DiscoveryCanvas from './DiscoveryCanvas';
 import LifecycleSubmission from './LifecycleSubmission';
 import DeltaReview from './DeltaReview';
 import LogViewer from './LogViewer';
+import AttachmentManager from '../components/AttachmentManager';
 import { getShadow } from '../utils/shadows';
 
 const defaultIntakeData = {};
@@ -38,6 +38,7 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
     const [supportPanelOpen, setSupportPanelOpen] = useState(true);
     const [filePanelOpen, setFilePanelOpen] = useState(true);
     const [activeDraft, setActiveDraft] = useState(null);
+    const [currentFiles, setCurrentFiles] = useState([]);
 
     // Mock actions - replace with actual useAiguState hook
     const actions = {
@@ -61,6 +62,22 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
         activeSessionId || 'temp',
         userId
     );
+
+    const loadFiles = async () => {
+        if (!activeSessionId || !liveActions.listFiles) return;
+        try {
+            const files = await liveActions.listFiles(activeSessionId);
+            setCurrentFiles(files);
+        } catch (e) {
+            console.error("Failed to load files", e);
+        }
+    };
+
+    useEffect(() => {
+        if (activeSessionId) {
+            loadFiles();
+        }
+    }, [activeSessionId]);
 
     const updateActiveSession = (id) => {
         console.log(`[Dashboard] setActiveSessionId: ${activeSessionId} -> ${id}`);
@@ -256,15 +273,26 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                     isRemediation={isRemediating}
                     initialData={activeState.artifacts?.intakeData || defaultIntakeData}
                     setRemediating={setIsRemediating}
-                    projectMetadata={activeState.projectMetadata || {}}
+                    projectMetadata={{ ...activeState.projectMetadata, submissionId: activeSessionId, userId }}
                     governance={activeState.governance || {}}
+                    files={currentFiles}
+                    onUploadSuccess={loadFiles}
                     onDraftUpdate={setActiveDraft}
                 />
             );
         }
 
         if (stage === 'POC' && status === 'Blocked') {
-            return <LifecycleSubmission stage="POC" state={activeState} actions={liveActions} />;
+            return (
+                <LifecycleSubmission
+                    stage="POC"
+                    state={activeState}
+                    actions={liveActions}
+                    files={currentFiles}
+                    onUploadSuccess={loadFiles}
+                    userId={userId}
+                />
+            );
         }
 
         if (stage === 'Production' && status === 'Blocked') {
@@ -274,7 +302,16 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
             if (isDeltaBlocked) {
                 return <DeltaReview state={activeState} onSubmit={liveActions.submitDelta} />;
             }
-            return <LifecycleSubmission stage="Production" state={activeState} actions={liveActions} />;
+            return (
+                <LifecycleSubmission
+                    stage="Production"
+                    state={activeState}
+                    actions={liveActions}
+                    files={currentFiles}
+                    onUploadSuccess={loadFiles}
+                    userId={userId}
+                />
+            );
         }
 
         // Default: Status Dashboard
@@ -331,6 +368,25 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                                     • MISSING ARTIFACT: {m.replace(/([A-Z])/g, ' $1').trim()}
                                 </Text>
                             ))}
+                        </View>
+                    )}
+
+                    {status === 'Blocked' && (
+                        <View style={{ marginTop: 24, padding: 20, borderRadius: 8, backgroundColor: theme.mode === 'dark' ? '#322d1c' : '#FFF9EB', borderLeftWidth: 4, borderLeftColor: theme.colors.warning }}>
+                            <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, fontWeight: '700', marginBottom: 8 }}>
+                                ACTION REQUIRED: Re-Submission
+                            </Text>
+                            <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, marginBottom: 16 }}>
+                                Once you have addressed the blockers and updated any necessary artifacts, click below to re-submit your project for evaluation.
+                            </Text>
+                            <TouchableOpacity
+                                style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
+                                onPress={async () => {
+                                    await liveActions.submitRevision();
+                                }}
+                            >
+                                <Text style={{ color: '#FFF', fontWeight: '700' }}>🚀 SUBMIT REVISION</Text>
+                            </TouchableOpacity>
                         </View>
                     )}
 
@@ -448,11 +504,33 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                                 <Text style={{ color: theme.colors.textSecondary }}>−</Text>
                             </TouchableOpacity>
                         </View>
-                        <FileManager
+
+                        <AttachmentManager
                             submissionId={activeSessionId}
                             userId={userId}
-                            actions={liveActions}
+                            files={currentFiles}
+                            onUploadSuccess={loadFiles}
+                            onDelete={liveActions.deleteArtifact}
+                            getUploadUrl={liveActions.getUploadUrl}
                         />
+
+                        {/* REMEDIATION ACTION */}
+                        {activeState.governance?.status === 'Blocked' && (
+                            <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 16 }}>
+                                <Text style={{ ...theme.typography.body, color: theme.colors.error, marginBottom: 8 }}>
+                                    Your project is blocked. Please address the issues above, manage your files, then click below to re-submit for review.
+                                </Text>
+                                <TouchableOpacity
+                                    style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
+                                    onPress={async () => {
+                                        await liveActions.submitRevision();
+                                        // Ideally, trigger a refresh/poll or optimistically update
+                                    }}
+                                >
+                                    <Text style={{ color: '#FFF', fontWeight: '700' }}>🚀 SUBMIT REVISION for RE-EVALUATION</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
                 )}
 

@@ -67,9 +67,9 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
         
         if not has_admin_approval:
             print("Gatekeeper: Blocking Accelerator project due to missing Admin Signature.")
-            new_status = "Pending"
+            new_status = "Blocked"
             blockers.append("GIGC Admin Approval Required (Accelerator Path)")
-            thought_process += "\n\n[Gatekeeper Oversight]: Accelerator projects require formal Admin signature (HITL) before approval. Reverting to Pending."
+            thought_process += "\n\n[Gatekeeper Oversight]: Accelerator projects require formal Admin signature (HITL) before approval. Sending back to user for coordination."
             action_summary = "Blocked: Missing Admin Signature"
             # Specific reasoning for Support Agent
             compliance_note = "Your technical approach is excellent, but because this is a High-Impact AI project, it requires a formal GIGC Admin signature before moving to the next phase."
@@ -77,9 +77,9 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
     # Rule 2: Lifecycle Enforcement (Pilot Check for High Risk)
     if risk_level in ["High", "Critical"] and new_status in ["Live", "Production-Ready"] and current_stage not in ["Pilot", "Production"]:
         print("Gatekeeper: Blocking High-Risk project skipping Pilot.")
-        new_status = "In-Review"
+        new_status = "Blocked"
         blockers.append("Must complete Pilot Phase verification")
-        thought_process += "\n\n[Gatekeeper Oversight]: High-Risk projects cannot skip Pilot phase. Reverting to In-Review."
+        thought_process += "\n\n[Gatekeeper Oversight]: High-Risk projects cannot skip Pilot phase. Sending back to user for lifecycle correction."
         action_summary = "Blocked: Lifecycle Violation (Skipped Pilot)"
         
     # -----------------------------------------------

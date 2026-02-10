@@ -167,7 +167,22 @@ def build_aigu_graph():
     
     # Terminal nodes
     workflow.add_edge("handover", END)
-    workflow.add_edge("support", END)
+    # Route from Support (Remediation Loop)
+    def route_support(state: GlobalState) -> Literal["librarian", END]:
+        """
+        Support acts as a pause. If the user submits a revision (status='Under Review'),
+        we loop back to the Librarian to re-check artifacts.
+        """
+        status = state.get("governance", {}).get("status")
+        if status == "Under Review":
+            print("  → Revision submitted: Routing back to Librarian for re-evaluation")
+            return "librarian"
+        return END
+
+    workflow.add_conditional_edges("support", route_support)
+    
+    # Terminal nodes
+    workflow.add_edge("handover", END)
     
     # Persistence Setup
     checkpoints_table = os.environ.get("CHECKPOINTS_TABLE_NAME")

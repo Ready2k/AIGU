@@ -133,6 +133,20 @@ Resources:
           - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
           - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
 
+  UploadDeleteMethodIAM:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref UploadResource
+      HttpMethod: DELETE
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
   UploadOptionsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -408,6 +422,42 @@ Resources:
           - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
           - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
 
+  # Submit Revision Resource
+  SubmitRevisionResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ParentId: !GetAtt AIGUApiGateway.RootResourceId
+      PathPart: submit-revision
+
+  SubmitRevisionMethodIAM:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref SubmitRevisionResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
+  SubmitRevisionOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AIGUApiGateway
+      ResourceId: !Ref SubmitRevisionResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue AIGU-LangGraphFunctionArn
+
   # 3. Gateway Responses (Enable CORS for IAM Rejection)
   GatewayResponse4XX:
     Type: AWS::ApiGateway::GatewayResponse
@@ -415,7 +465,7 @@ Resources:
       ResponseParameters:
         gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
         gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS,DELETE'"
       ResponseType: DEFAULT_4XX
       RestApiId: !Ref AIGUApiGateway
 
@@ -425,7 +475,7 @@ Resources:
       ResponseParameters:
         gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
         gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS,DELETE'"
       ResponseType: DEFAULT_5XX
       RestApiId: !Ref AIGUApiGateway
 
@@ -439,8 +489,8 @@ Resources:
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AIGUApiGateway}/*/*/*'
 
 
-  # 5. Deployment (New Logical ID V10 to force redeploy with new endpoints)
-  AIGUApiDeploymentV10:
+  # 5. Deployment (New Logical ID V11 to force redeploy with new endpoints)
+  AIGUApiDeploymentV11:
     Type: AWS::ApiGateway::Deployment
     DependsOn: 
       - InvokeMethodIAM
@@ -450,6 +500,7 @@ Resources:
       - StatePostMethodIAM
       - StateDeleteMethodIAM
       - UploadMethodIAM
+      - UploadDeleteMethodIAM
       - UploadOptionsMethod
       - FilesMethodIAM
       - FilesOptionsMethod
@@ -465,18 +516,20 @@ Resources:
       - DeltaOptionsMethod
       - SessionsMethodIAM
       - SessionsOptionsMethod
+      - SubmitRevisionMethodIAM
+      - SubmitRevisionOptionsMethod
       - GatewayResponse4XX
       - GatewayResponse5XX
     Properties:
       RestApiId: !Ref AIGUApiGateway
-      Description: Add upload, files, support/ask endpoints with DELETE /state
+      Description: Add DELETE /upload and POST /submit-revision
 
   AIGUApiStage:
     Type: AWS::ApiGateway::Stage
     Properties:
       StageName: v1
       RestApiId: !Ref AIGUApiGateway
-      DeploymentId: !Ref AIGUApiDeploymentV10
+      DeploymentId: !Ref AIGUApiDeploymentV11
 
 Outputs:
   ApiEndpoint:

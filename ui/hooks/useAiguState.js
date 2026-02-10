@@ -255,6 +255,30 @@ export const useAiguState = (submissionId, userId) => {
         }
     }, [signedFetch, submissionId, userId]);
 
+    const submitRevision = useCallback(async () => {
+        setLoading(true);
+        try {
+            console.log("Submitting revision for", submissionId);
+            const response = await signedFetch('/submit-revision', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ submissionId, userId })
+            });
+
+            // The backend returns { message, result: { ...new_state... } }
+            // We should update the local state with the result from the graph invocation
+            if (response.result) {
+                setGlobalState(response.result);
+            } else {
+                fetchState(); // Fallback if full state isn't returned
+            }
+        } catch (err) {
+            setError(err);
+        } finally {
+            setLoading(false);
+        }
+    }, [signedFetch, submissionId, userId, fetchState]);
+
     const getUploadUrl = useCallback(async (uploadData) => {
         try {
             console.log(`Getting upload URL for: ${uploadData.fileName}`);
@@ -270,10 +294,30 @@ export const useAiguState = (submissionId, userId) => {
         }
     }, [signedFetch]);
 
-    const listFiles = useCallback(async (submissionId) => {
+    const deleteArtifact = useCallback(async (fileName) => {
+        setLoading(true);
         try {
-            console.log(`Listing files for submission: ${submissionId}`);
-            const result = await signedFetch(`/files?submissionId=${encodeURIComponent(submissionId)}&userId=${encodeURIComponent(userId)}`);
+            const response = await signedFetch('/upload', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ submissionId, userId, fileName })
+            });
+            // Refetch state to get updated artifacts list
+            fetchState();
+            return response;
+        } catch (err) {
+            setError(err);
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    }, [signedFetch, submissionId, userId, fetchState]);
+
+    const listFiles = useCallback(async (submissionIdOverride) => {
+        try {
+            const idToQuery = submissionIdOverride || submissionId;
+            console.log(`Listing files for submission: ${idToQuery}`);
+            const result = await signedFetch(`/files?submissionId=${encodeURIComponent(idToQuery)}&userId=${encodeURIComponent(userId)}`);
             return result || [];
         } catch (err) {
             console.error("Failed to list files", err);
@@ -372,8 +416,10 @@ export const useAiguState = (submissionId, userId) => {
             listFiles,
             askSupportAgent,
             fetchPrompts,
-            updatePrompt
-        }), [initiateIntake, submitPOC, submitProduction, submitDelta, updateConfig, fetchState, fetchReasoning, fetchAdminQueue, fetchDelta, fetchModels, fetchSessions, fetchConfig, adminAction, deleteProject, getUploadUrl, listFiles, askSupportAgent, fetchPrompts, updatePrompt]),
+            updatePrompt,
+            submitRevision,
+            deleteArtifact
+        }), [initiateIntake, submitPOC, submitProduction, submitDelta, updateConfig, fetchState, fetchReasoning, fetchAdminQueue, fetchDelta, fetchModels, fetchSessions, fetchConfig, adminAction, deleteProject, getUploadUrl, listFiles, askSupportAgent, fetchPrompts, updatePrompt, submitRevision, deleteArtifact]),
         computed: {
             isBlocked,
             isInReview,

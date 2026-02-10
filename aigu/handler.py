@@ -34,16 +34,23 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         user_id = None
         payload = {}
 
-        if method == "POST":
+        if method in ["POST", "DELETE", "PUT"]:
             body_str = event.get("body", "{}")
-            payload = json.loads(body_str) if isinstance(body_str, str) else body_str
-            submission_id = payload.get("submissionId")
-            user_id = payload.get("userId")
-        else:
-            query_params = event.get("queryStringParameters", {}) or {}
+            if body_str:
+                try:
+                    payload = json.loads(body_str) if isinstance(body_str, str) else body_str
+                    submission_id = payload.get("submissionId")
+                    user_id = payload.get("userId")
+                except:
+                    payload = {}
+        
+        # Fallback to query parameters if not found in body
+        query_params = event.get("queryStringParameters", {}) or {}
+        if not submission_id:
             submission_id = query_params.get("submissionId")
+        if not user_id:
             user_id = query_params.get("userId")
-
+            
         if not submission_id:
             # Fallback for old tests that might use projectName as ID or missing ID
             submission_id = payload.get("projectName", "default-session")
@@ -298,6 +305,134 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     "body": json.dumps({"error": f"Failed to generate upload URL: {str(e)}"})
                 }
 
+        # --- PATH: /upload (Delete File) ---
+        elif "/upload" in path and method == "DELETE":
+            import boto3
+            s3_client = boto3.client('s3')
+            bucket_name = os.environ.get('ARTIFACT_BUCKET', 'aigu-artifacts')
+            dynamodb = boto3.resource('dynamodb')
+            state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+
+            file_name = payload.get('fileName')
+            submission_id_for_file = payload.get('submissionId', submission_id)
+
+            if not file_name or not submission_id_for_file:
+                 return {
+                     "statusCode": 400,
+                     "headers": headers,
+                     "body": json.dumps({"error": "fileName and submissionId required"})
+                 }
+
+            upload_user_id = user_id if user_id and user_id != 'null' else "anonymous"
+            s3_key = f"uploads/{upload_user_id}/{submission_id_for_file}/{file_name}"
+
+            try:
+                # Delete from S3
+                s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
+                print(f"Deleted S3 object: {s3_key}")
+                
+                # Update DynamoDB
+                current_files = []
+                try:
+                    state_resp = state_table.get_item(Key={"submissionId": submission_id_for_file, "userId": upload_user_id})
+                    if 'Item' in state_resp:
+                        # Depending on structure, artifacts might be a map or list. 
+                        # The upload logic appended to 'artifacts.files'.
+                        current_files = state_resp['Item'].get('artifacts', {}).get('files', [])
+                        if file_name in current_files:
+                            current_files.remove(file_name)
+                            # Update the files list
+                            state_table.update_item(
+                                Key={"submissionId": submission_id_for_file, "userId": upload_user_id},
+                                UpdateExpression="SET artifacts.files = :files",
+                                ExpressionAttributeValues={":files": current_files}
+                            )
+                except Exception as db_err:
+                     print(f"Warning: Failed to update DynamoDB on delete: {db_err}")
+
+                return {
+                    "statusCode": 200,
+                    "headers": headers,
+                    "body": json.dumps({"message": "File deleted", "artifacts": {"files": current_files}})
+                }
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+                return {
+                    "statusCode": 500,
+                    "headers": headers,
+                    "body": json.dumps({"error": str(e)})
+                }
+
+        # --- PATH: /submit-revision (Remediation Trigger) ---
+        elif "/submit-revision" in path and method == "POST":
+            import boto3
+            dynamodb = boto3.resource('dynamodb')
+            state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+            
+            print(f"Handling Revision for Submission: {submission_id}")
+
+            # 1. Update status to 'Under Review' directly in DynamoDB
+            try:
+                effective_userId = user_id if user_id and user_id != 'null' else "anonymous"
+                
+                # Try direct update first
+                try:
+                    state_table.update_item(
+                        Key={"submissionId": submission_id, "userId": effective_userId},
+                        UpdateExpression="SET governance.#s = :status",
+                        ExpressionAttributeNames={"#s": "status"},
+                        ExpressionAttributeValues={":status": "Under Review"}
+                    )
+                except state_table.meta.client.exceptions.ConditionalCheckFailedException:
+                    # Fallback: Query for the authoritative userId for this submissionId
+                    from boto3.dynamodb.conditions import Key
+                    q_resp = state_table.query(KeyConditionExpression=Key('submissionId').eq(submission_id))
+                    if q_resp.get('Items'):
+                        found_userId = q_resp['Items'][0].get('userId')
+                        print(f"Authoritative userId for {submission_id} is {found_userId}. Updating that item.")
+                        state_table.update_item(
+                            Key={"submissionId": submission_id, "userId": found_userId},
+                            UpdateExpression="SET governance.#s = :status",
+                            ExpressionAttributeNames={"#s": "status"},
+                            ExpressionAttributeValues={":status": "Under Review"}
+                        )
+                        # Update our local user_id for graph config below
+                        user_id = found_userId
+            except Exception as e:
+                print(f"Status update failed: {e}")
+                return {
+                    "statusCode": 500,
+                    "headers": headers,
+                    "body": json.dumps({"error": f"Failed to update status: {e}"})
+                }
+            
+            # 2. Invoke Graph (Targeting Librarian by resuming from Support)
+            try:
+                # Ensure we use the correct userId for graph config
+                # Re-fetch from DB if we haven't confirmed it yet
+                final_userId = user_id if user_id and user_id != 'null' else "anonymous"
+                config = {"configurable": {"thread_id": submission_id}}
+                
+                # Explicitly update graph state to match DynamoDB
+                # This ensures any manual status changes are reflected in LangGraph checkpoints
+                app.update_state(config, {"governance": {"status": "Under Review"}, "userId": final_userId}, as_node="support")
+                
+                # Invoke to proceed from 'support'
+                result = app.invoke(None, config=config)
+                
+                return {
+                    "statusCode": 200,
+                    "headers": headers,
+                    "body": json.dumps({"message": "Revision submitted", "result": result}, default=str)
+                }
+            except Exception as graph_err:
+                 print(f"Graph invocation failed: {graph_err}")
+                 return {
+                     "statusCode": 500, 
+                     "headers": headers, 
+                     "body": json.dumps({"error": f"Failed to invoke graph: {graph_err}"})
+                 }
+
         # --- PATH: /files (List Submission Files) ---
         elif "/files" in path and method == "GET":
             import boto3
@@ -313,8 +448,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
             
             try:
-                # List objects in S3 using standardized path: uploads/{userId}/{submissionId}/
-                # Ensure userId is handled if missing (consistent with upload logic)
+                # 1. Standardize userId and prefix
                 list_user_id = user_id if user_id and user_id != 'null' else "anonymous"
                 prefix = f"uploads/{list_user_id}/{submission_id}/"
                 print(f"DEBUG LIST FILES: userId={user_id} -> {list_user_id}, submissionId={submission_id}, prefix={prefix}")
@@ -324,6 +458,23 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     Prefix=prefix
                 )
                 
+                # 2. Fallback: If no files found, check if the project belongs to a different (case-different) user in DynamoDB
+                if not response.get('Contents'):
+                    try:
+                        import boto3
+                        dynamodb = boto3.resource('dynamodb')
+                        state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+                        from boto3.dynamodb.conditions import Key
+                        q_resp = state_table.query(KeyConditionExpression=Key('submissionId').eq(submission_id))
+                        if q_resp.get('Items'):
+                            actual_user_id = q_resp['Items'][0].get('userId')
+                            if actual_user_id and actual_user_id != list_user_id:
+                                print(f"Redirecting list_objects to authoritative userId: {actual_user_id}")
+                                prefix = f"uploads/{actual_user_id}/{submission_id}/"
+                                response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+                    except Exception as fallback_err:
+                        print(f"Warning: File list fallback failed: {fallback_err}")
+
                 files = []
                 for obj in response.get('Contents', []):
                     # Generate pre-signed URL for viewing
@@ -690,9 +841,40 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     }
             
             # Handle GET method for fetching state
+            import boto3
+            dynamodb = boto3.resource('dynamodb')
+            state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+            
+            # 1. Authoritative fetch from Global State table (contains uploads & manual overrides)
+            detailed_state = {}
+            try:
+                # Try fetching with provide userId first
+                effective_userId = user_id if user_id and user_id != 'null' else "anonymous"
+                print(f"Fetching Global State for {submission_id} (user: {effective_userId})")
+                
+                response = state_table.get_item(Key={"submissionId": submission_id, "userId": effective_userId})
+                if 'Item' in response:
+                    detailed_state = response['Item']
+                else:
+                    # Fallback: Query by submissionId only if userId mismatch (e.g. casing)
+                    print(f"No exact match for {submission_id}/{effective_userId}. Trying query by submissionId...")
+                    from boto3.dynamodb.conditions import Key
+                    q_resp = state_table.query(KeyConditionExpression=Key('submissionId').eq(submission_id))
+                    if q_resp.get('Items'):
+                        detailed_state = q_resp['Items'][0]
+                        print(f"Found item under different userId: {detailed_state.get('userId')}")
+            except Exception as db_err:
+                print(f"Warning: Failed to fetch detailed state from DB: {db_err}")
+
+            # 2. Sync with LangGraph Checkpoint (if needed, though detailed_state is preferred)
             state_data = app.get_state(config)
             
-            if not state_data or not state_data.values:
+            # 3. Merge or fallback
+            result_state = detailed_state
+            if not result_state and state_data and state_data.values:
+                result_state = dict(state_data.values)
+            
+            if not result_state:
                 return {
                     "statusCode": 200,
                     "headers": headers,
@@ -706,8 +888,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     })
                 }
 
-            # Enrich with fresh pre-signed URLs
-            enriched_state = enrich_state_with_presigned_urls(dict(state_data.values))
+            # 4. Enrich with fresh pre-signed URLs
+            enriched_state = enrich_state_with_presigned_urls(result_state)
 
             return {
                 "statusCode": 200,
