@@ -181,6 +181,7 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
                         placeholderTextColor={theme.colors.textSecondary}
                         value={formData.projectName}
                         onChangeText={(v) => handleUpdateField('projectName', v)}
+                        editable={governance.status !== 'Cancelled'}
                     />
 
                     {!hasGaps && (
@@ -194,6 +195,7 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
                                 numberOfLines={8}
                                 value={description}
                                 onChangeText={setDescription}
+                                editable={governance.status !== 'Cancelled'}
                             />
 
                             <TouchableOpacity onPress={() => setShowAdvanced(!showAdvanced)} style={{ marginVertical: 10 }}>
@@ -238,6 +240,7 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
                                             multiline={key !== 'owner' && key !== 'businessArea'}
                                             value={formData[key]}
                                             onChangeText={(v) => handleUpdateField(key, v)}
+                                            editable={governance.status !== 'Cancelled'}
                                         />
                                     </View>
                                 );
@@ -260,14 +263,14 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
 
                     <TouchableOpacity
                         style={[styles.button, {
-                            backgroundColor: submitting || isGateClosed ? theme.colors.border : theme.colors.primary,
-                            opacity: submitting || isGateClosed ? 0.6 : 1
+                            backgroundColor: submitting || isGateClosed || governance.status === 'Cancelled' ? theme.colors.border : theme.colors.primary,
+                            opacity: submitting || isGateClosed || governance.status === 'Cancelled' ? 0.6 : 1
                         }]}
                         onPress={handleSubmit}
-                        disabled={submitting || isGateClosed}
+                        disabled={submitting || isGateClosed || governance.status === 'Cancelled'}
                     >
                         <Text style={styles.buttonText}>
-                            {isGateClosed ? 'COMPLETE REQUIRED FIELDS' : (submitting ? 'PROCESSING...' : (isRemediation ? 'UPDATE & RESUBMIT' : 'SUBMIT TO AIGU'))}
+                            {governance.status === 'Cancelled' ? 'PROJECT CANCELLED' : (isGateClosed ? 'COMPLETE REQUIRED FIELDS' : (submitting ? 'PROCESSING...' : (isRemediation ? 'UPDATE & RESUBMIT' : 'SUBMIT TO AIGU')))}
                         </Text>
                     </TouchableOpacity>
                 </View>

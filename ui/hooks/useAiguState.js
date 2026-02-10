@@ -296,6 +296,24 @@ export const useAiguState = (submissionId, userId) => {
         }
     }, [signedFetch]);
 
+    const cancelProject = useCallback(async (reason = "Cancelled by user") => {
+        setLoading(true);
+        try {
+            console.log(`Cancelling project: ${submissionId}`);
+            const newState = await signedFetch('/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ submissionId, userId, reason })
+            });
+            setGlobalState(newState);
+        } catch (err) {
+            setError(err);
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    }, [signedFetch, submissionId, userId]);
+
     const deleteArtifact = useCallback(async (fileName) => {
         setLoading(true);
         try {
@@ -420,13 +438,15 @@ export const useAiguState = (submissionId, userId) => {
             fetchPrompts,
             updatePrompt,
             submitRevision,
-            deleteArtifact
-        }), [initiateIntake, submitPOC, submitProduction, submitDelta, updateConfig, fetchState, fetchReasoning, fetchAdminQueue, fetchDelta, fetchModels, fetchSessions, fetchConfig, adminAction, deleteProject, getUploadUrl, listFiles, askSupportAgent, fetchPrompts, updatePrompt, submitRevision, deleteArtifact]),
+            deleteArtifact,
+            cancelProject
+        }), [initiateIntake, submitPOC, submitProduction, submitDelta, updateConfig, fetchState, fetchReasoning, fetchAdminQueue, fetchDelta, fetchModels, fetchSessions, fetchConfig, adminAction, deleteProject, getUploadUrl, listFiles, askSupportAgent, fetchPrompts, updatePrompt, submitRevision, deleteArtifact, cancelProject]),
         computed: {
             isBlocked,
             isInReview,
             isApproved,
             isEngaged,
+            isCancelled: status === 'Cancelled',
             isDeltaBlocked,
             blockers,
             currentStage,

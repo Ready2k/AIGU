@@ -800,6 +800,73 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "body": json.dumps(items, default=str)
             }
 
+        # --- PATH: /cancel ---
+        elif "/cancel" in path and method == "POST":
+            import boto3
+            from datetime import datetime, timezone
+            from aigu.utils import generate_audit_signature, get_current_user_identity
+            
+            dynamodb = boto3.resource('dynamodb')
+            state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
+            
+            if not submission_id or not user_id:
+                return {
+                    "statusCode": 400,
+                    "headers": headers,
+                    "body": json.dumps({"error": "submissionId and userId required"})
+                }
+            
+            try:
+                print(f"Cancelling project: {submission_id} for user: {user_id}")
+                
+                # Fetch current state
+                response = state_table.get_item(Key={"submissionId": submission_id, "userId": user_id})
+                if 'Item' not in response:
+                    return {
+                        "statusCode": 404,
+                        "headers": headers,
+                        "body": json.dumps({"error": "Project not found"})
+                    }
+                
+                item = response['Item']
+                
+                # Update status
+                if "governance" not in item: item["governance"] = {}
+                item["governance"]["status"] = "Cancelled"
+                
+                # Audit Log Entry
+                timestamp = datetime.now(timezone.utc).isoformat()
+                audit_entry = {
+                    "timestamp": timestamp,
+                    "agent": "User Action",
+                    "action": "PROJECT_CANCELLED",
+                    "reason": payload.get("reason", "Cancelled by user"),
+                    "userIdentity": get_current_user_identity()
+                }
+                audit_entry["signature"] = generate_audit_signature(audit_entry)
+                
+                current_log = item.get("auditLog", [])
+                if not isinstance(current_log, list): current_log = []
+                current_log.append(audit_entry)
+                item["auditLog"] = current_log
+                
+                # Persist
+                state_table.put_item(Item=item)
+                
+                return {
+                    "statusCode": 200,
+                    "headers": headers,
+                    "body": json.dumps({"success": True, "status": "Cancelled", "auditEntry": audit_entry})
+                }
+                
+            except Exception as e:
+                print(f"Error cancelling project: {e}")
+                return {
+                    "statusCode": 500,
+                    "headers": headers,
+                    "body": json.dumps({"error": str(e)})
+                }
+
         # --- PATH: /delta ---
         elif "/delta" in path:
             import boto3

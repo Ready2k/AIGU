@@ -88,8 +88,20 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
     const updateSessions = (updater) => {
         setSessions(prev => {
             const next = typeof updater === 'function' ? updater(prev) : updater;
-            console.log(`[Dashboard] setSessions update. Count ${prev.length} -> ${next.length}. IDs:`, next.map(s => s.submissionId));
-            return next;
+
+            // Robust Deduplication by submissionId (case-insensitive)
+            const seen = new Set();
+            const unique = next.filter(s => {
+                const id = s.submissionId?.toLowerCase();
+                if (!id || seen.has(id)) return false;
+                seen.add(id);
+                return true;
+            });
+
+            if (prev.length !== unique.length) {
+                console.log(`[Dashboard] setSessions update (deduplicated). Count ${prev.length} -> ${unique.length}`);
+            }
+            return unique;
         });
     };
 
@@ -328,10 +340,24 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                                 {activeState.artifacts?.intakeData?.description || 'No description'}
                             </Text>
                         </View>
-                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(status, theme) }]}>
-                            <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 14 }}>
-                                {status}
-                            </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            {status !== 'Cancelled' && status !== 'Approved' && status !== 'Live' && (
+                                <TouchableOpacity
+                                    style={[styles.cancelButton, { marginRight: 12 }]}
+                                    onPress={() => {
+                                        if (confirm("Are you sure you want to cancel this request? It will become read-only.")) {
+                                            liveActions.cancelProject();
+                                        }
+                                    }}
+                                >
+                                    <Text style={{ color: theme.colors.error, fontWeight: '600' }}>Cancel Request</Text>
+                                </TouchableOpacity>
+                            )}
+                            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(status, theme) }]}>
+                                <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 14 }}>
+                                    {status}
+                                </Text>
+                            </View>
                         </View>
                     </View>
 
@@ -605,6 +631,8 @@ const getStatusColor = (status, theme) => {
             return theme.colors.success;
         case 'Blocked':
             return theme.colors.error;
+        case 'Cancelled':
+            return '#adb5bd'; // Neutral grey
         case 'In-Review':
         case 'InReview':
         case 'Draft':
@@ -620,6 +648,13 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         flexDirection: 'row'
+    },
+    cancelButton: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(217, 48, 37, 0.3)',
     },
     sidebar: {
         width: 280,
