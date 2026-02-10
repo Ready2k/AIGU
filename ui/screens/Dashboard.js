@@ -9,6 +9,7 @@ import LifecycleSubmission from './LifecycleSubmission';
 import DeltaReview from './DeltaReview';
 import LogViewer from './LogViewer';
 import AttachmentManager from '../components/AttachmentManager';
+import ResponsiveWrapper from '../components/ResponsiveWrapper';
 import { getShadow } from '../utils/shadows';
 
 const defaultIntakeData = {};
@@ -316,10 +317,10 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
 
         // Default: Status Dashboard
         return (
-            <ScrollView style={{ flex: 1 }}>
+            <ResponsiveWrapper>
                 <View style={styles.contentPanel}>
                     <View style={styles.statusHeader}>
-                        <View>
+                        <View style={{ flex: 1, marginRight: 16 }}>
                             <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary }}>
                                 {activeState.projectMetadata?.name || 'Untitled Project'}
                             </Text>
@@ -406,7 +407,7 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                         <Text style={{ color: '#FFF', fontWeight: '700' }}>View Full Audit Log</Text>
                     </TouchableOpacity>
                 </View>
-            </ScrollView>
+            </ResponsiveWrapper>
         );
     };
 

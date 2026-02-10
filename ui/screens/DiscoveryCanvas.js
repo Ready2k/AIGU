@@ -134,7 +134,7 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
     };
 
     return (
-        <ResponsiveWrapper>
+        <ResponsiveWrapper scrollable={false}>
             <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.contentContainer}>
                 <View style={styles.formContainer}>
                     <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, marginBottom: theme.spacing.md }}>

@@ -8,13 +8,13 @@ const ResponsiveWrapper = ({ children, scrollable = true }) => {
 
     // Responsive Logic
     const isDesktop = width >= 768;
-    const containerWidth = isDesktop ? Math.min(width, 1200) : '100%';
     const paddingHorizontal = isDesktop ? 24 : 16; // Comfortable padding
     const paddingTop = isDesktop ? 40 : 16;
 
     const Content = (
         <View style={{
-            width: containerWidth,
+            width: '100%',
+            maxWidth: 1200,
             alignSelf: 'center',
             paddingHorizontal: paddingHorizontal,
             paddingTop: paddingTop,
