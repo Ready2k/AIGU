@@ -96,8 +96,8 @@ class IntakeValidation:
         if funding_str.upper() == "TBD":
             return True
         try:
-            # Strip currency symbols/commas
-            clean = funding_str.replace("$", "").replace(",", "").strip()
+            # Strip currency symbols/commas/spaces
+            clean = funding_str.replace("$", "").replace("£", "").replace("€", "").replace(",", "").strip()
             float(clean)
             return True
         except ValueError:

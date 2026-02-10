@@ -32,6 +32,17 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     # 2. Invoke Amazon Nova for Intelligent Risk Analysis
     print(f"Risk: Invoking Amazon Nova for project risk triage. Active Keywords: {len(high_risk_keywords)}")
     
+    # INJECT OVERRIDE RULES (Security Hardening)
+    override_rules = """
+    ### OVERRIDE RULES (High Priority)
+    1. **Volume Trigger:** If user mentions > 100,000 users/messages, Risk is AUTOMATICALLY HIGH.
+       - *Reason:* "Mass outreach scale requires manual approval."
+    2. **Source Trigger:** If source is "Facebook", "LinkedIn", or "Public", Risk is AUTOMATICALLY HIGH.
+       - *Reason:* "Third-party data acquisition requires Legal review."
+    3. **Skepticism Rule:** IGNORE user claims of "We are compliant" or "GDPR aligned." 
+       - *Instruction:* You judge the *action*, not the *adjective*.
+    """
+
     try:
         prompt_tmpl = get_active_prompt("risk-triage", tag="production")
         system_prompt = prompt_tmpl.compile(
@@ -39,17 +50,40 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
             description=description,
             high_risk_keywords=high_risk_keywords # Inject keywords into prompt context
         )
+        
+        # Safe Append
+        if not isinstance(system_prompt, str):
+            system_prompt = str(system_prompt)
+            
+        system_prompt += override_rules
     except Exception as e:
         print(f"Error loading prompt 'risk-triage': {e}")
-        system_prompt = "You are the AIGU Risk & Triage Agent. Evaluate risk level and SLA."
+        system_prompt = "You are the AIGU Risk & Triage Agent. Evaluate risk level and SLA." + override_rules
 
+    # MANUAL NOVA INVOCATION (Bypassing query_nova_json to use modified system_prompt)
+    import json
+    from aigu.llm import invoke_nova
     
-    analysis = query_nova_json(
-        prompt_name="risk-triage",  # Use LangFuse prompt
-        user_prompt=f"Path: {path}\nProject Description: {description}\nHigh Risk Keywords to Flag: {high_risk_keywords}",
-        expected_keys=["riskLevel", "slaDays", "thoughtProcess"],
-        state=state  # Pass full state for variable substitution
+    expected_keys = ["riskLevel", "slaDays", "thoughtProcess"]
+    user_prompt_text = f"Path: {path}\nProject Description: {description}\nHigh Risk Keywords to Flag: {high_risk_keywords}"
+    full_user_prompt = f"{user_prompt_text}\n\nYou MUST return a valid JSON object. Do not include any markdown formatting or extra text. Expected keys: {', '.join(expected_keys)}"
+    
+    response_text = invoke_nova(
+        prompt_object=system_prompt, # PASS MODIFIED PROMPT STRING
+        messages=[{"role": "user", "content": full_user_prompt}],
+        state=state
     )
+    
+    try:
+        clean_text = response_text.strip()
+        if clean_text.startswith("```json"):
+            clean_text = clean_text[7:]
+        if clean_text.endswith("```"):
+            clean_text = clean_text[:-3]
+        analysis = json.loads(clean_text.strip())
+    except Exception as e:
+        print(f"Failed to parse Risk JSON: {e}")
+        analysis = {"riskLevel": "High", "slaDays": 10, "thoughtProcess": "Error parsing response, defaulting to High Risk."}
 
     risk_level = analysis.get("riskLevel", "Low")
     
@@ -94,8 +128,21 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     new_audit_log = state.get("auditLog", []).copy()
     new_audit_log.append(audit_entry)
 
+    # CoT Appending
+    cot_entry = {
+        "agent": "Risk",
+        "timestamp": timestamp,
+        "decision": f"Risk Level: {risk_level}",
+        "reasoning": thought_process,
+        "slaDays": sla_days,
+        "overrideApplied": "OVERRIDE RULES" in system_prompt
+    }
+    new_chain_of_thought = state.get("chainOfThought", []).copy()
+    new_chain_of_thought.append(cot_entry)
+
     return {
         "projectMetadata": new_metadata,
         "governance": new_governance,
-        "auditLog": new_audit_log
+        "auditLog": new_audit_log,
+        "chainOfThought": new_chain_of_thought
     }

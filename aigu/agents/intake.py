@@ -208,9 +208,22 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     elif not new_governance.get("status") or new_governance.get("status") == "New":
         new_governance["status"] = "Draft"
 
+    # CoT Appending
+    cot_entry = {
+        "agent": "Intake Orchestrator",
+        "timestamp": timestamp,
+        "decision": f"Path: {path}",
+        "reasoning": thought_process,
+        "extractedData": extracted_data,
+        "missingFields": missing_fields
+    }
+    new_chain_of_thought = state.get("chainOfThought", []).copy()
+    new_chain_of_thought.append(cot_entry)
+
     return {
         "projectMetadata": new_metadata,
         "auditLog": new_audit_log,
         "governance": new_governance,
-        "artifacts": {**state.get("artifacts", {}), "intakeData": new_intake_data}
+        "artifacts": {**state.get("artifacts", {}), "intakeData": new_intake_data},
+        "chainOfThought": new_chain_of_thought
     }

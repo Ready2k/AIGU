@@ -81,6 +81,21 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
         blockers.append("Must complete Pilot Phase verification")
         thought_process += "\n\n[Gatekeeper Oversight]: High-Risk projects cannot skip Pilot phase. Sending back to user for lifecycle correction."
         action_summary = "Blocked: Lifecycle Violation (Skipped Pilot)"
+    
+    # Rule 3 (NEW): No-Reply Communications Block (PECR/CAN-SPAM)
+    # We check the raw description for specific trigger phrases even if the LLM missed it.
+    description_raw = state.get("artifacts", {}).get("intakeData", {}).get("description", "").lower()
+    
+    is_no_reply = "no-reply" in description_raw or "no reply" in description_raw
+    is_mass_comms = "sms" in description_raw or "email" in description_raw or "outreach" in description_raw
+    
+    if is_no_reply and is_mass_comms:
+        print("Gatekeeper: Blocking 'No-Reply' mass communication.")
+        new_status = "Blocked"
+        blockers.append("Regulatory Violation: No-Reply Communication")
+        thought_process += "\n\n[Gatekeeper Oversight]: 'No-Reply' mass communication violates PECR/CAN-SPAM. User must implement Opt-Out/Reply mechanism."
+        action_summary = "Blocked: Regulatory Violation (No-Reply)"
+        compliance_note = "Using a 'No-Reply' mechanism for mass outreach is a violation of digital communication laws (PECR/CAN-SPAM). You must implement a valid Opt-Out or Reply channel."
         
     # -----------------------------------------------
 
@@ -149,8 +164,21 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
                 admin_link="https://aigu.io/admin/queue"
             )
 
+    # CoT Appending
+    cot_entry = {
+        "agent": "Gatekeeper",
+        "timestamp": timestamp,
+        "decision": f"Status: {new_status}",
+        "reasoning": thought_process,
+        "actionSummary": action_summary,
+        "blockers": blockers
+    }
+    new_chain_of_thought = state.get("chainOfThought", []).copy()
+    new_chain_of_thought.append(cot_entry)
+
     return {
         "governance": new_governance,
         "artifacts": {**artifacts, "complianceStatus": new_compliance},
-        "auditLog": new_audit_log
+        "auditLog": new_audit_log,
+        "chainOfThought": new_chain_of_thought
     }

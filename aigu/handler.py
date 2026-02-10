@@ -609,7 +609,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 tasks = context.get('tasks', [])
                 lct_task = next((t for t in tasks if t.get('team') == 'LCT'), None)
                 if lct_task:
-                    residual_risks_text = f"Residual Risks Task: {lct_task.get('task')} (Status: {lct_task.get('status')})"
+                    residual_risks_text = f"Lean Control Tool Task: {lct_task.get('task')} (Status: {lct_task.get('status')})"
 
             # 2. Fetch Prompt and Invoke
             try:

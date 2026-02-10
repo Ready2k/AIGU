@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 # AIGU Management & Operations Suite
 # Usage: ./aigu_manager.sh [deploy | teardown | test | logs]
 

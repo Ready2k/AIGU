@@ -84,15 +84,37 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
 
     # 5. Process Results & Update State
     new_artifacts = artifacts.copy()
-    actions_taken = analysis.get("actionsTaken", ["Routine document analysis."])
+    actions_taken = analysis.get("actionsTaken", ["Routine document analysis. -- File Verification Step Added"])
     thought_process = analysis.get("thoughtProcess", "AI-driven content mapping performed.")
     
     missing_artifacts = []
+    
+    # CRITICAL FIX: Enforce Physical File Presence
+    # We must check if a file was actually uploaded, not just if text was extracted.
+    uploaded_files = state.get("artifacts", {}).get("files", [])
+    # For now, we do a naive check: if required > 0, we expect files > 0
+    # In a more advanced version, we'd map specific files to specific artifacts (e.g. "design.pdf" -> "technicalDesign")
+    
+    has_physical_files = len(uploaded_files) > 0
+    
     for art in required_artifacts:
         content = analysis.get(art)
-        if content and content != "Not Found" and len(str(content)) > 50:
+        
+        # Check 1: Did the LLM find content?
+        has_content = content and content != "Not Found" and len(str(content)) > 20
+        
+        # Check 2 (NEW): Is there a physical file for this? (For Technical Design/Security)
+        # We enforce this strictly for 'technicalDesign' and 'securityReview'
+        requires_physical_file = art in ["technicalDesign", "securityReview", "complianceStatus"]
+        
+        if has_content:
             new_artifacts[art] = content
             print(f"Librarian: Identified content for {art}")
+            
+            if requires_physical_file and not has_physical_files:
+                 # AUTOMATIC FLAGGING FOR "PHANTOM FILES"
+                 print(f"Librarian: ALERT - Content found for {art} but NO physical files uploaded. Marking as MISSING.")
+                 missing_artifacts.append(f"{art} (Physical File Required)")
         else:
             if art not in new_artifacts or not new_artifacts.get(art):
                 missing_artifacts.append(art)
@@ -131,9 +153,22 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
         new_governance["status"] = "Blocked"
         new_governance["blockers"] = [f"Missing Content: {art}" for art in missing_artifacts]
     
+    # CoT Appending
+    cot_entry = {
+        "agent": "Librarian",
+        "timestamp": timestamp,
+        "decision": f"Artifacts Valid: {artifacts_valid}",
+        "reasoning": thought_process,
+        "missingArtifacts": missing_artifacts,
+        "actionsTaken": actions_taken
+    }
+    new_chain_of_thought = state.get("chainOfThought", []).copy()
+    new_chain_of_thought.append(cot_entry)
+
     return {
         "artifacts": new_artifacts, 
         "auditLog": new_audit_log,
         "projectMetadata": new_project_metadata,
-        "governance": new_governance
+        "governance": new_governance,
+        "chainOfThought": new_chain_of_thought
     }
