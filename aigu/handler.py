@@ -1152,6 +1152,48 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     "body": json.dumps(config_data, default=str)
                 }
 
+        # --- PATH: /admin/config ---
+        elif "/admin/config" in path:
+            import boto3
+            from datetime import datetime, timezone
+            from aigu.utils import get_current_user_identity
+            
+            dynamodb = boto3.resource('dynamodb')
+            config_table = dynamodb.Table(os.environ.get("SYS_CONFIG_TABLE", "AIGU_SystemConfig"))
+            
+            path_parts = path.split('/')
+            # Expected path: /admin/config/{agentId}
+            agent_id = path_parts[-1] if len(path_parts) > 3 else None
+            
+            if not agent_id:
+                return {"statusCode": 400, "headers": headers, "body": json.dumps({"error": "agentId required"})}
+
+            if method == "POST":
+                from aigu.config import update_config
+                payload = json.loads(event.get("body", "{}"))
+                user = get_current_user_identity()
+                
+                success = update_config(agent_id, payload, user=user)
+                
+                if not success:
+                    return {"statusCode": 500, "headers": headers, "body": json.dumps({"error": "Failed to update config"})}
+                
+                return {
+                    "statusCode": 200,
+                    "headers": headers,
+                    "body": json.dumps({"success": True, "agentId": agent_id, "lastUpdated": timestamp})
+                }
+            else:
+                # GET
+                response = config_table.get_item(Key={"agentId": agent_id})
+                item = response.get("Item", {})
+                
+                return {
+                    "statusCode": 200,
+                    "headers": headers,
+                    "body": json.dumps(item, default=str)
+                }
+
         # --- PATH: /models ---
         elif "/models" in path:
             import boto3

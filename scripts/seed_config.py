@@ -1,57 +1,46 @@
-
 import boto3
 import os
 import json
+from datetime import datetime, timezone
 
-# Configuration
-REGION = os.environ.get("AWS_REGION", "us-east-1")
-TABLE_NAME = os.environ.get("CONFIG_TABLE_NAME", "AIGU_System_Config")
-
-def seed_config():
-    print(f"Seeding System Config to table: {TABLE_NAME} in {REGION}")
-    dynamodb = boto3.resource('dynamodb', region_name=REGION)
-    table = dynamodb.Table(TABLE_NAME)
-
-    # 1. Risk Agent Config
-    risk_config = {
-        "configType": "AGENT_CONFIG",
-        "configId": "risk_triage",
-        "data": {
-            "high_risk_keywords": ["Scraping", "PII", "Bio-metric", "Facial Recognition", "Medical"],
-            "sla_days": {
-                "High": 10,
-                "Medium": 7,
-                "Low": 3
+def seed_system_config():
+    print("🌱 Seeding AIGU_SystemConfig table...")
+    
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    table_name = os.environ.get("SYS_CONFIG_TABLE", "AIGU_SystemConfig")
+    table = dynamodb.Table(table_name)
+    
+    timestamp = datetime.now(timezone.utc).isoformat()
+    
+    configs = [
+        {
+            "agentId": "risk_agent",
+            "config": {
+                "high_risk_keywords": ["Scraping", "No-Reply", "100k+"],
+                "sla_thresholds": {"High": 10, "Medium": 7, "Low": 3}
             },
-            "enabled": True
-        }
-    }
-
-    # 2. Librarian Agent Config
-    librarian_config = {
-        "configType": "AGENT_CONFIG",
-        "configId": "librarian",
-        "data": {
-            "required_artifacts": {
-                "High": ["technicalDesign", "securityReview", "dataFlowDiagram", "complianceStatus"],
-                "Medium": ["technicalDesign", "complianceStatus"],
-                "Low": ["technicalDesign"]
+            "lastUpdated": timestamp,
+            "updatedBy": "System Seed"
+        },
+        {
+            "agentId": "librarian_agent",
+            "config": {
+                "required_artifacts": {
+                    "High": ["intakeData", "technicalDesign", "DPIA", "securityReview", "complianceStatus"],
+                    "Medium": ["intakeData", "technicalDesign", "complianceStatus"],
+                    "Low": ["intakeData", "technicalDesign"]
+                }
             },
-            "doc_retention_days": 365,
-            "enabled": True
+            "lastUpdated": timestamp,
+            "updatedBy": "System Seed"
         }
-    }
-
-    try:
-        print("Putting Risk Config...")
-        table.put_item(Item=risk_config)
+    ]
+    
+    for item in configs:
+        print(f"  - Seeding {item['agentId']}...")
+        table.put_item(Item=item)
         
-        print("Putting Librarian Config...")
-        table.put_item(Item=librarian_config)
-        
-        print("✅ Configuration Seeded Successfully.")
-    except Exception as e:
-        print(f"❌ Error seeding config: {e}")
+    print("✅ Seeding complete.")
 
 if __name__ == "__main__":
-    seed_config()
+    seed_system_config()

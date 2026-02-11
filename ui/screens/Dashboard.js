@@ -242,6 +242,33 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
         setActiveState(newProject);
     };
 
+    const handleCancelSubmission = async () => {
+        if (!activeSessionId) return;
+
+        if (isRemediating) {
+            setIsRemediating(false);
+            return;
+        }
+
+        const isTemp = activeSessionId.startsWith('temp-');
+
+        if (isTemp) {
+            // Remove from local sessions
+            updateSessions(prev => prev.filter(s => s.submissionId !== activeSessionId));
+            setActiveSessionId(null);
+            setActiveState(null);
+        } else {
+            // Call backend to cancel
+            try {
+                await liveActions.cancelProject();
+                // State update should be handled by polling or back from cancelProject
+            } catch (e) {
+                console.error("Cancel failed", e);
+                alert("Failed to cancel: " + e.message);
+            }
+        }
+    };
+
     const filteredSessions = sessions.filter(s => {
         const name = (s.projectMetadata?.name || s.submissionId || '').toLowerCase();
         return name.includes(searchQuery.toLowerCase());
@@ -291,6 +318,7 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                     files={currentFiles}
                     onUploadSuccess={loadFiles}
                     onDraftUpdate={setActiveDraft}
+                    onCancel={handleCancelSubmission}
                 />
             );
         }

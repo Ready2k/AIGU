@@ -18,19 +18,13 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     submission_id = state.get("submissionId", "unknown")
     
     # 1. Fetch Dynamic Config
-    import boto3
-    import os
-    dynamodb = boto3.resource('dynamodb')
-    config_table = dynamodb.Table(os.environ.get("CONFIG_TABLE_NAME", "AIGU_System_Config"))
-    
-    librarian_config = {}
-    try:
-        resp = config_table.get_item(Key={"configType": "AGENT_CONFIG", "configId": "librarian"})
-        librarian_config = resp.get("Item", {}).get("data", {})
-    except Exception as e:
-        print(f"Warning: Failed to fetch Librarian Config: {e}")
-        
-    config_required_artifacts = librarian_config.get("required_artifacts", {})
+    from aigu.config import get_config
+    librarian_config = get_config("librarian_agent")
+    config_required_artifacts = librarian_config.get("required_artifacts", {
+        "High": ["intakeData", "technicalDesign", "DPIA", "securityReview", "complianceStatus"],
+        "Medium": ["intakeData", "technicalDesign", "complianceStatus"],
+        "Low": ["intakeData", "technicalDesign"]
+    })
 
     # 2. Determine Required Artifacts based on Risk Level
     dynamic_reqs = config_required_artifacts.get(risk_level)

@@ -12,22 +12,12 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     description = state.get("artifacts", {}).get("intakeData", {}).get("description", "")
     path = project_metadata.get("path", "Stop")
     submission_id = state.get("submissionId", "unknown")
-
-    # 1. Fetch Dynamic Config
-    import boto3
-    import os
-    dynamodb = boto3.resource('dynamodb')
-    config_table = dynamodb.Table(os.environ.get("CONFIG_TABLE_NAME", "AIGU_System_Config"))
     
-    risk_config = {}
-    try:
-        resp = config_table.get_item(Key={"configType": "AGENT_CONFIG", "configId": "risk_triage"})
-        risk_config = resp.get("Item", {}).get("data", {})
-    except Exception as e:
-        print(f"Warning: Failed to fetch Risk Config: {e}")
-
-    high_risk_keywords = risk_config.get("high_risk_keywords", [])
-    sla_map = risk_config.get("sla_days", {"High": 10, "Medium": 5, "Low": 3})
+    # 1. Fetch Dynamic Config
+    from aigu.config import get_config
+    risk_config = get_config("risk_agent")
+    high_risk_keywords = risk_config.get("high_risk_keywords", ["Scraping", "No-Reply", "100k+"])
+    sla_map = risk_config.get("sla_thresholds", {"High": 10, "Medium": 7, "Low": 3})
 
     # 2. Invoke Amazon Nova for Intelligent Risk Analysis
     print(f"Risk: Invoking Amazon Nova for project risk triage. Active Keywords: {len(high_risk_keywords)}")

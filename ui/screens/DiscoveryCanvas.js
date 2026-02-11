@@ -5,7 +5,7 @@ import ResponsiveWrapper from '../components/ResponsiveWrapper';
 import { getShadow } from '../utils/shadows';
 import AttachmentManager from '../components/AttachmentManager';
 
-const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, setRemediating, projectMetadata = {}, governance = {}, files, onUploadSuccess, onDraftUpdate }) => {
+const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, setRemediating, projectMetadata = {}, governance = {}, files, onUploadSuccess, onDraftUpdate, onCancel }) => {
     const { theme } = useAiguTheme();
     const [description, setDescription] = useState(initialData.description || '');
     const [submitting, setSubmitting] = useState(false);
@@ -261,18 +261,45 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
                         </View>
                     )}
 
-                    <TouchableOpacity
-                        style={[styles.button, {
-                            backgroundColor: submitting || isGateClosed || governance.status === 'Cancelled' ? theme.colors.border : theme.colors.primary,
-                            opacity: submitting || isGateClosed || governance.status === 'Cancelled' ? 0.6 : 1
-                        }]}
-                        onPress={handleSubmit}
-                        disabled={submitting || isGateClosed || governance.status === 'Cancelled'}
-                    >
-                        <Text style={styles.buttonText}>
-                            {governance.status === 'Cancelled' ? 'PROJECT CANCELLED' : (isGateClosed ? 'COMPLETE REQUIRED FIELDS' : (submitting ? 'PROCESSING...' : (isRemediation ? 'UPDATE & RESUBMIT' : 'SUBMIT TO AIGU')))}
-                        </Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+                        {onCancel && (
+                            <TouchableOpacity
+                                style={[styles.button, {
+                                    flex: 1,
+                                    backgroundColor: 'transparent',
+                                    borderWidth: 1,
+                                    borderColor: theme.colors.error,
+                                    marginTop: 0
+                                }]}
+                                onPress={() => {
+                                    const msg = isRemediation
+                                        ? "Exit remediation? Any unsaved changes will be lost."
+                                        : "Are you sure you want to cancel this submission?";
+                                    if (confirm(msg)) {
+                                        onCancel();
+                                    }
+                                }}
+                            >
+                                <Text style={[styles.buttonText, { color: theme.colors.error }]}>
+                                    {isRemediation ? 'CANCEL EDITS' : 'CANCEL SUBMISSION'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                            style={[styles.button, {
+                                flex: 2,
+                                backgroundColor: submitting || isGateClosed || governance.status === 'Cancelled' ? theme.colors.border : theme.colors.primary,
+                                opacity: submitting || isGateClosed || governance.status === 'Cancelled' ? 0.6 : 1,
+                                marginTop: 0
+                            }]}
+                            onPress={handleSubmit}
+                            disabled={submitting || isGateClosed || governance.status === 'Cancelled'}
+                        >
+                            <Text style={styles.buttonText}>
+                                {governance.status === 'Cancelled' ? 'PROJECT CANCELLED' : (isGateClosed ? 'COMPLETE REQUIRED FIELDS' : (submitting ? 'PROCESSING...' : (isRemediation ? 'UPDATE & RESUBMIT' : 'SUBMIT TO AIGU')))}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
         </ResponsiveWrapper>

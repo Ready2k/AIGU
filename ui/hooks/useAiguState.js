@@ -371,6 +371,30 @@ export const useAiguState = (submissionId, userId) => {
         }
     }, [signedFetch]);
 
+    const fetchAgentConfig = useCallback(async (agentId) => {
+        try {
+            console.log(`Fetching config for agent: ${agentId}`);
+            return await signedFetch(`/admin/config/${agentId}`);
+        } catch (err) {
+            console.error(`Failed to fetch config for ${agentId}`, err);
+            return null;
+        }
+    }, [signedFetch]);
+
+    const updateAgentConfig = useCallback(async (agentId, configData) => {
+        try {
+            console.log(`Updating config for agent: ${agentId}`);
+            return await signedFetch(`/admin/config/${agentId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(configData)
+            });
+        } catch (err) {
+            console.error(`Failed to update config for ${agentId}`, err);
+            throw err;
+        }
+    }, [signedFetch]);
+
     const updatePrompt = useCallback(async (name, content, tags = ['production']) => {
         try {
             console.log(`Updating prompt: ${name}`);
@@ -437,10 +461,12 @@ export const useAiguState = (submissionId, userId) => {
             askSupportAgent,
             fetchPrompts,
             updatePrompt,
+            fetchAgentConfig,
+            updateAgentConfig,
             submitRevision,
             deleteArtifact,
             cancelProject
-        }), [initiateIntake, submitPOC, submitProduction, submitDelta, updateConfig, fetchState, fetchReasoning, fetchAdminQueue, fetchDelta, fetchModels, fetchSessions, fetchConfig, adminAction, deleteProject, getUploadUrl, listFiles, askSupportAgent, fetchPrompts, updatePrompt, submitRevision, deleteArtifact, cancelProject]),
+        }), [initiateIntake, submitPOC, submitProduction, submitDelta, updateConfig, fetchState, fetchReasoning, fetchAdminQueue, fetchDelta, fetchModels, fetchSessions, fetchConfig, adminAction, deleteProject, getUploadUrl, listFiles, askSupportAgent, fetchPrompts, updatePrompt, fetchAgentConfig, updateAgentConfig, submitRevision, deleteArtifact, cancelProject]),
         computed: {
             isBlocked,
             isInReview,

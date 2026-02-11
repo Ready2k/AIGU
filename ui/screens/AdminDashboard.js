@@ -6,6 +6,7 @@ import WorkflowProgress from '../components/WorkflowProgress';
 import SupportAgent from '../components/SupportAgent';
 import PromptManager from '../components/PromptManager';
 import FileManager from '../components/FileManager';
+import AgentCommandCenter from '../components/AgentCommandCenter';
 import { getShadow } from '../utils/shadows';
 
 /**
@@ -300,8 +301,8 @@ const AdminDashboard = ({ userId, onLogout }) => {
             {/* Left Sidebar - Filters & Stats */}
             <View style={[styles.sidebar, { backgroundColor: theme.colors.surface, borderRightColor: theme.colors.border }]}>
                 <View style={styles.sidebarHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <TouchableOpacity onPress={() => setActiveTab('queue')} style={{ marginRight: 15 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1, overflow: 'hidden' }}>
+                        <TouchableOpacity onPress={() => setActiveTab('queue')} style={{ marginRight: 10 }}>
                             <Text style={{
                                 ...theme.typography.header,
                                 color: activeTab === 'queue' ? theme.colors.primary : theme.colors.textSecondary,
@@ -310,13 +311,25 @@ const AdminDashboard = ({ userId, onLogout }) => {
                                 Queue
                             </Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => setActiveTab('prompts')}>
+                        <TouchableOpacity onPress={() => setActiveTab('prompts')} style={{ marginRight: 10 }}>
                             <Text style={{
                                 ...theme.typography.header,
                                 color: activeTab === 'prompts' ? theme.colors.primary : theme.colors.textSecondary,
                                 fontSize: 18
                             }}>
                                 Prompts
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setActiveTab('config')} style={{ minWidth: 70 }}>
+                            <Text
+                                numberOfLines={1}
+                                style={{
+                                    ...theme.typography.header,
+                                    color: activeTab === 'config' ? theme.colors.primary : theme.colors.textSecondary,
+                                    fontSize: 16
+                                }}
+                            >
+                                Command
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -430,6 +443,8 @@ const AdminDashboard = ({ userId, onLogout }) => {
             <View style={styles.mainContent}>
                 {activeTab === 'prompts' ? (
                     <PromptManager userId={userId} />
+                ) : activeTab === 'config' ? (
+                    <AgentCommandCenter actions={actions} />
                 ) : (
                     renderRightPanel()
                 )}

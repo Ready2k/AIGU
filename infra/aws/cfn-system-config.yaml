@@ -1,0 +1,25 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AIGU System Configuration Layer - Dynamic Agent Logic Controls
+
+Resources:
+  AIGUSystemConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AIGU_SystemConfig
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: agentId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: agentId
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+Outputs:
+  SystemConfigTableName:
+    Value: !Ref AIGUSystemConfigTable
+    Export:
+      Name: AIGU-SystemConfigTable-Admin
