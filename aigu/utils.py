@@ -38,6 +38,36 @@ def generate_audit_signature(entry: dict) -> str:
     payload = f"{entry.get('timestamp')}|{entry.get('agent')}|{entry.get('action')}|{entry.get('reason')}|{entry.get('reasoningContext')}"
     return hashlib.sha256(payload.encode('utf-8')).hexdigest()
 
+def delete_s3_prefix(bucket: str, prefix: str):
+    """
+    Recursively deletes all objects under a given S3 prefix.
+    """
+    try:
+        if not prefix or prefix == "/":
+             print("Refusing to delete with empty or root prefix")
+             return
+
+        paginator = s3_client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+
+        delete_us = []
+        for page in pages:
+            if 'Contents' in page:
+                for obj in page['Contents']:
+                    delete_us.append({'Key': obj['Key']})
+
+                # Delete in batches of 1000
+                if len(delete_us) >= 1000:
+                    s3_client.delete_objects(Bucket=bucket, Delete={'Objects': delete_us})
+                    delete_us = []
+
+        if delete_us:
+            s3_client.delete_objects(Bucket=bucket, Delete={'Objects': delete_us})
+            
+        print(f"Successfully deleted all objects under prefix: {prefix}")
+    except Exception as e:
+        print(f"Error during S3 prefix deletion ({prefix}): {e}")
+
 def get_current_user_identity() -> str:
     """
     Retrieves the IAM Identity or equivalent.

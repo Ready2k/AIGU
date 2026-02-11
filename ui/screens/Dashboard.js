@@ -253,10 +253,16 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
         const isTemp = activeSessionId.startsWith('temp-');
 
         if (isTemp) {
-            // Remove from local sessions
-            updateSessions(prev => prev.filter(s => s.submissionId !== activeSessionId));
-            setActiveSessionId(null);
-            setActiveState(null);
+            // Trigger full cleanup (Dynamo + S3) via deleteProject
+            try {
+                await liveActions.deleteProject(activeSessionId, userId);
+                updateSessions(prev => prev.filter(s => s.submissionId !== activeSessionId));
+                setActiveSessionId(null);
+                setActiveState(null);
+            } catch (e) {
+                console.error("Full cleanup failed", e);
+                alert("Failed to delete temporary project: " + e.message);
+            }
         } else {
             // Call backend to cancel
             try {

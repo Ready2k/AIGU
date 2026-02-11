@@ -946,11 +946,24 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                             "userId": user_id
                         }
                     )
-                    print(f"Successfully deleted project: {submission_id}")
+                    
+                    # [CLEANUP] Delete associated S3 assets (uploads and reasoning)
+                    from aigu.utils import delete_s3_prefix
+                    bucket_name = os.environ.get('ARTIFACT_BUCKET', 'aigu-artifacts')
+                    
+                    # 1. Delete Uploads
+                    upload_prefix = f"uploads/{user_id}/{submission_id}/"
+                    delete_s3_prefix(bucket_name, upload_prefix)
+                    
+                    # 2. Delete Reasoning
+                    reasoning_prefix = f"reasoning/{submission_id}/"
+                    delete_s3_prefix(bucket_name, reasoning_prefix)
+                    
+                    print(f"Successfully deleted project and cleared S3 assets: {submission_id}")
                     return {
                         "statusCode": 200,
                         "headers": headers,
-                        "body": json.dumps({"success": True, "message": "Project deleted"})
+                        "body": json.dumps({"success": True, "message": "Project and S3 assets deleted"})
                     }
                 except Exception as e:
                     print(f"Error deleting project: {str(e)}")
