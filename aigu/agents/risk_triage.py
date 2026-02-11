@@ -85,6 +85,8 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
         sla_days = analysis.get("slaDays", 3)
         
     thought_process = analysis.get("thoughtProcess", "Step-by-step risk analysis carried out.")
+    if not isinstance(thought_process, str):
+        thought_process = json.dumps(thought_process) if isinstance(thought_process, (dict, list)) else str(thought_process)
 
     # 3. State & SLA Logic
     deadline_date = datetime.now(timezone.utc) + timedelta(days=sla_days)

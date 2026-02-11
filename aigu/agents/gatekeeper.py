@@ -49,6 +49,8 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
     blockers = analysis.get("blockers", [])
     new_compliance = analysis.get("complianceStatus", compliance_status)
     thought_process = analysis.get("thoughtProcess", "Compliance check complete.")
+    if not isinstance(thought_process, str):
+        thought_process = json.dumps(thought_process) if isinstance(thought_process, (dict, list)) else str(thought_process)
     action_summary = analysis.get("actionSummary", "Evaluated signals.")
 
     # --- GATEKEEPER ENFORCEMENT RULES (Refactored) ---

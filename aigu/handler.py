@@ -1,7 +1,20 @@
 import json
 import os
+import traceback
+import decimal
+from datetime import datetime, timezone
+from typing import Dict, Any, List, Optional
+import boto3
 from aigu.graph import app
-from typing import Dict, Any
+
+def convert_floats_to_decimals(obj):
+    if isinstance(obj, float):
+        return decimal.Decimal(str(obj))
+    if isinstance(obj, dict):
+        return {k: convert_floats_to_decimals(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_floats_to_decimals(i) for i in obj]
+    return obj
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
@@ -91,14 +104,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 effective_userId = user_id if user_id and user_id != 'null' else "anonymous"
                 
                 print(f"Attempting to persist initial state for project: {submission_id_val}")
-                state_table.put_item(Item={
+                initial_item = {
                     "submissionId": submission_id,
                     "userId": effective_userId,
                     "artifacts": {"intakeData": inner_payload},
                     "projectMetadata": {"currentStage": "Intake", "path": "Pending"},
                     "governance": {"status": "Draft"},
                     "auditLog": []
-                })
+                }
+                state_table.put_item(Item=convert_floats_to_decimals(initial_item))
 
             graph_input = {
                 "submissionId": submission_id,
@@ -204,7 +218,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if "userId" not in result: result["userId"] = graph_input["userId"]
             
             print(f"Updating Global State for {submission_id} (Status: {result.get('governance', {}).get('status')})")
-            state_table.put_item(Item=result)
+            try:
+                # Convert any floats to Decimals for DynamoDB
+                serializable_result = convert_floats_to_decimals(result)
+                state_table.put_item(Item=serializable_result)
+            except Exception as db_err:
+                print(f"Error persisting state to DynamoDB: {db_err}")
+                traceback.print_exc()
+                # Continue if possible, or raise if critical
             
             if hasattr(langfuse_handler, "client"):
                 langfuse_handler.client.flush()
@@ -1194,7 +1215,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 return {
                     "statusCode": 200,
                     "headers": headers,
-                    "body": json.dumps({"success": True, "agentId": agent_id, "lastUpdated": timestamp})
+                    "body": json.dumps({"success": True, "agentId": agent_id, "lastUpdated": datetime.now(timezone.utc).isoformat()})
                 }
             else:
                 # GET
@@ -1238,12 +1259,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     except Exception as e:
         print(f"Execution Error: {str(e)}")
-        import traceback
         traceback.print_exc()
         return {
             "statusCode": 500,
-            "headers": headers,
-            "body": json.dumps({"message": str(e), "type": type(e).__name__})
+            "headers": headers if 'headers' in locals() else {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({
+                "message": str(e),
+                "type": type(e).__name__,
+                "stack": traceback.format_exc() if os.environ.get("DEBUG_ERRORS") == "true" else None
+            })
         }
 
 def enrich_state_with_presigned_urls(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -1251,71 +1278,84 @@ def enrich_state_with_presigned_urls(state: Dict[str, Any]) -> Dict[str, Any]:
     Generates fresh pre-signed S3 URLs for all reasoning context URIs in the audit log.
     Stored in ui_overlay.reasoningUrls mapping.
     """
-    import boto3
-    s3 = boto3.client('s3')
-    reasoning_urls = {}
-    
-    audit_log = state.get("auditLog", [])
-    for entry in audit_log:
-        s3_uri = entry.get("reasoningContext")
-        if s3_uri and s3_uri.startswith("s3://"):
-            try:
-                # Parse URI: s3://bucket/key
-                parts = s3_uri.replace("s3://", "").split("/", 1)
-                if len(parts) == 2:
-                    bucket, key = parts
-                    url = s3.generate_presigned_url(
-                        'get_object',
-                        Params={'Bucket': bucket, 'Key': key},
-                        ExpiresIn=3600 # 1 Hour
-                    )
-                    reasoning_urls[s3_uri] = url
-            except Exception as e:
-                print(f"Warning: Failed to pre-sign {s3_uri}: {e}")
+    try:
+        import boto3
+        s3 = boto3.client('s3')
+        reasoning_urls = {}
+        
+        audit_log = state.get("auditLog", [])
+        if isinstance(audit_log, list):
+            for entry in audit_log:
+                if not isinstance(entry, dict): continue
+                s3_uri = entry.get("reasoningContext")
+                if s3_uri and isinstance(s3_uri, str) and s3_uri.startswith("s3://"):
+                    try:
+                        # Parse URI: s3://bucket/key
+                        parts = s3_uri.replace("s3://", "").split("/", 1)
+                        if len(parts) == 2:
+                            bucket, key = parts
+                            url = s3.generate_presigned_url(
+                                'get_object',
+                                Params={'Bucket': bucket, 'Key': key},
+                                ExpiresIn=3600 # 1 Hour
+                            )
+                            reasoning_urls[s3_uri] = url
+                    except Exception as e:
+                        print(f"Warning: Failed to pre-sign {s3_uri}: {e}")
+    except Exception as e:
+        print(f"Warning: Failed to process audit log for pre-signing: {e}")
 
-    state["ui_overlay"] = {
-        **(state.get("ui_overlay", {}) or {}),
-        "reasoningUrls": reasoning_urls
-    }
+    try:
+        state["ui_overlay"] = {
+            **(state.get("ui_overlay", {}) or {}),
+            "reasoningUrls": reasoning_urls if 'reasoning_urls' in locals() else {}
+        }
+    except:
+        pass
     
     # 2. Enrich Project Files in artifacts.files
-    artifacts = state.get("artifacts", {})
-    files = artifacts.get("files", [])
-    submission_id = state.get("submissionId")
-    user_id = state.get("userId")
-    bucket_name = os.environ.get('ARTIFACT_BUCKET', 'aigu-artifacts')
-    
-    # If it's a list, process each file
-    if isinstance(files, list):
-        enriched_files = []
-        for f in files:
-            file_uri = f
-            # Reconstruct legacy URI if missing
-            if isinstance(f, str) and not f.startswith("s3://") and submission_id and user_id:
-                file_uri = f"s3://{bucket_name}/uploads/{user_id}/{submission_id}/{f}"
-            
-            # Now process the URI (either original or reconstructed)
-            target_path = file_uri.get("uri") if isinstance(file_uri, dict) else file_uri
-            
-            if isinstance(target_path, str) and target_path.startswith("s3://"):
-                try:
-                    parts = target_path.replace("s3://", "").split("/", 1)
-                    if len(parts) == 2:
-                        bucket, key = parts
-                        filename = key.split("/")[-1]
-                        url = s3.generate_presigned_url(
-                            'get_object',
-                            Params={'Bucket': bucket, 'Key': key},
-                            ExpiresIn=3600
-                        )
-                        enriched_files.append({"name": filename, "presignedUrl": url, "uri": target_path})
-                except Exception as e:
-                    print(f"Warning: Failed to sign artifact {target_path}: {e}")
-            elif isinstance(f, dict): # Already enriched?
-                enriched_files.append(f)
+    try:
+        artifacts = state.get("artifacts", {})
+        files = artifacts.get("files", [])
+        submission_id = state.get("submissionId")
+        user_id = state.get("userId")
+        bucket_name = os.environ.get('ARTIFACT_BUCKET', 'aigu-artifacts')
         
-        # Update the state with enriched files
-        artifacts["files"] = enriched_files
+        # If it's a list, process each file
+        if isinstance(files, list):
+            enriched_files = []
+            for f in files:
+                file_uri = f
+                # Reconstruct legacy URI if missing
+                if isinstance(f, str) and not f.startswith("s3://") and submission_id and user_id:
+                    file_uri = f"s3://{bucket_name}/uploads/{user_id}/{submission_id}/{f}"
+                
+                # Now process the URI (either original or reconstructed)
+                target_path = file_uri.get("uri") if isinstance(file_uri, dict) else file_uri
+                
+                if isinstance(target_path, str) and target_path.startswith("s3://"):
+                    try:
+                        import boto3
+                        s3 = boto3.client('s3')
+                        parts = target_path.replace("s3://", "").split("/", 1)
+                        if len(parts) == 2:
+                            bucket, key = parts
+                            filename = key.split("/")[-1]
+                            url = s3.generate_presigned_url(
+                                'get_object',
+                                Params={'Bucket': bucket, 'Key': key},
+                                ExpiresIn=3600
+                            )
+                            enriched_files.append({"name": filename, "presignedUrl": url, "uri": target_path})
+                    except Exception as e:
+                        print(f"Warning: Failed to sign artifact {target_path}: {e}")
+                elif isinstance(f, dict): # Already enriched?
+                    enriched_files.append(f)
+            
+            # Update the state with enriched files
+            artifacts["files"] = enriched_files
+    except Exception as e:
+        print(f"Warning: Failed to enrich files with pre-signed URLs: {e}")
     
     return state
 
