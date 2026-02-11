@@ -206,7 +206,7 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
                         </>
                     )}
 
-                    {(showAdvanced || hasGaps) && (
+                    {(showAdvanced || hasGaps || isRemediation) && (
                         <View style={styles.detailsContainer}>
                             {Object.keys(fieldLabels).map(key => {
                                 if (key === 'projectName') return null;

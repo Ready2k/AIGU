@@ -202,6 +202,7 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
 
     const loadProjectState = async (projectId) => {
         updateActiveSession(projectId);
+        setIsRemediating(false); // Reset UI state on project switch
 
         const searchId = projectId.toLowerCase();
         const session = sessions.find(s => s.submissionId?.toLowerCase() === searchId);
@@ -294,6 +295,24 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
         const stage = activeState.projectMetadata?.currentStage || 'Intake';
         const status = activeState.governance?.status || 'Draft';
 
+        // Remediation/Editing is top priority
+        if (isRemediating) {
+            return (
+                <DiscoveryCanvas
+                    actions={liveActions}
+                    isRemediation={true}
+                    initialData={activeState.artifacts?.intakeData || defaultIntakeData}
+                    setRemediating={setIsRemediating}
+                    projectMetadata={{ ...activeState.projectMetadata, submissionId: activeSessionId, userId }}
+                    governance={activeState.governance || {}}
+                    files={currentFiles}
+                    onUploadSuccess={loadFiles}
+                    onDraftUpdate={setActiveDraft}
+                    onCancel={handleCancelSubmission}
+                />
+            );
+        }
+
         if (showLogs) {
             return (
                 <View style={{ flex: 1 }}>
@@ -312,11 +331,11 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
         }
 
         // Stage-based routing
-        if (stage === 'Intake' && (status === 'Draft' || status === 'New' || isRemediating)) {
+        if (stage === 'Intake' && (status === 'Draft' || status === 'New')) {
             return (
                 <DiscoveryCanvas
                     actions={liveActions}
-                    isRemediation={isRemediating}
+                    isRemediation={false}
                     initialData={activeState.artifacts?.intakeData || defaultIntakeData}
                     setRemediating={setIsRemediating}
                     projectMetadata={{ ...activeState.projectMetadata, submissionId: activeSessionId, userId }}
@@ -376,16 +395,24 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             {status !== 'Cancelled' && status !== 'Approved' && status !== 'Live' && (
-                                <TouchableOpacity
-                                    style={[styles.cancelButton, { marginRight: 12 }]}
-                                    onPress={() => {
-                                        if (confirm("Are you sure you want to cancel this request? It will become read-only.")) {
-                                            liveActions.cancelProject();
-                                        }
-                                    }}
-                                >
-                                    <Text style={{ color: theme.colors.error, fontWeight: '600' }}>Cancel Request</Text>
-                                </TouchableOpacity>
+                                <>
+                                    <TouchableOpacity
+                                        style={[styles.cancelButton, { marginRight: 12, borderColor: theme.colors.primary }]}
+                                        onPress={() => setIsRemediating(true)}
+                                    >
+                                        <Text style={{ color: theme.colors.primary, fontWeight: '700' }}>Edit Intake</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.cancelButton, { marginRight: 12 }]}
+                                        onPress={() => {
+                                            if (confirm("Are you sure you want to cancel this request? It will become read-only.")) {
+                                                liveActions.cancelProject();
+                                            }
+                                        }}
+                                    >
+                                        <Text style={{ color: theme.colors.error, fontWeight: '600' }}>Cancel Request</Text>
+                                    </TouchableOpacity>
+                                </>
                             )}
                             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(status, theme) }]}>
                                 <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 14 }}>
@@ -440,23 +467,31 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                             <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, marginBottom: 16 }}>
                                 Once you have addressed the blockers and updated any necessary artifacts, click below to re-submit your project for evaluation.
                             </Text>
-                            <TouchableOpacity
-                                style={[styles.actionButton, { backgroundColor: theme.colors.primary, opacity: liveLoading ? 0.7 : 1 }]}
-                                disabled={liveLoading}
-                                onPress={async () => {
-                                    try {
-                                        await liveActions.submitRevision();
-                                    } catch (e) {
-                                        alert("Submission failed: " + e.message);
-                                    }
-                                }}
-                            >
-                                {liveLoading ? (
-                                    <ActivityIndicator color="#FFF" />
-                                ) : (
-                                    <Text style={{ color: '#FFF', fontWeight: '700' }}>🚀 SUBMIT REVISION</Text>
-                                )}
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                <TouchableOpacity
+                                    style={[styles.actionButton, { flex: 1, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.primary }]}
+                                    onPress={() => setIsRemediating(true)}
+                                >
+                                    <Text style={{ color: theme.colors.primary, fontWeight: '700' }}>✏️ EDIT INTAKE DATA</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.actionButton, { flex: 1, backgroundColor: theme.colors.primary, opacity: liveLoading ? 0.7 : 1 }]}
+                                    disabled={liveLoading}
+                                    onPress={async () => {
+                                        try {
+                                            await liveActions.submitRevision();
+                                        } catch (e) {
+                                            alert("Submission failed: " + e.message);
+                                        }
+                                    }}
+                                >
+                                    {liveLoading ? (
+                                        <ActivityIndicator color="#FFF" />
+                                    ) : (
+                                        <Text style={{ color: '#FFF', fontWeight: '700' }}>🚀 SUBMIT REVISION</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     )}
 
