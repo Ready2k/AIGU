@@ -4,6 +4,7 @@ import { useAiguTheme } from '../theme/ThemeContext';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
 import { getShadow } from '../utils/shadows';
 import WorkflowProgress from '../components/WorkflowProgress';
+import MarkdownText from '../components/MarkdownText';
 
 const SupportStatus = ({ state, onViewLog, refresh, onRemediate }) => {
     const { theme } = useAiguTheme();
@@ -100,9 +101,9 @@ const SupportStatus = ({ state, onViewLog, refresh, onRemediate }) => {
                             <Text style={{ ...theme.typography.subheader, color: theme.colors.primary, marginBottom: 8 }}>
                                 🧠 Assistant Guidance
                             </Text>
-                            <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, lineHeight: 20 }}>
+                            <MarkdownText style={{ ...theme.typography.body, color: theme.colors.textPrimary, lineHeight: 22 }}>
                                 {state.ui_overlay.supportMessage}
-                            </Text>
+                            </MarkdownText>
                         </View>
                     )}
 

@@ -51,7 +51,20 @@ def librarian_audit_handler(state: Dict[str, Any]) -> Dict[str, Any]:
 
     # 2. Extract from Links in Intake/Tech Design
     # Scan for URLs in specific fields
-    all_text_to_scan = f"{intake_data.get('description', '')} {intake_data.get('technicalApproach', '')} {tech_design.get('architecture', '')}"
+    
+    # Safe get helper for string or dict
+    def safe_get(obj, key, default=""):
+        if isinstance(obj, dict):
+            return obj.get(key, default) or default
+        return str(obj) if obj else default
+
+    desc = safe_get(intake_data, 'description')
+    approach = safe_get(intake_data, 'technicalApproach')
+    arch = safe_get(tech_design, 'architecture')
+    if isinstance(tech_design, str) and not arch:
+        arch = tech_design # Use the whole string as architecture if it's a string
+
+    all_text_to_scan = f"{desc} {approach} {arch}"
     urls = re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', all_text_to_scan)
     
     for url in urls:

@@ -10,12 +10,18 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     """
     Governance Librarian Agent.
     """
-    artifacts = state.get("artifacts", {})
-    intake_data = artifacts.get("intakeData", {})
-    tech_design = artifacts.get("technicalDesign", {})
-    project_metadata = state.get("projectMetadata", {})
-    risk_level = project_metadata.get("riskLevel", "Low")
-    submission_id = state.get("submissionId", "unknown")
+    # Safe get helper for string or dict
+    def safe_get(obj, key, default={}):
+        if isinstance(obj, dict):
+            return obj.get(key, default) or default
+        return default
+
+    artifacts = safe_get(state, "artifacts")
+    intake_data = safe_get(artifacts, "intakeData")
+    tech_design = safe_get(artifacts, "technicalDesign")
+    project_metadata = safe_get(state, "projectMetadata")
+    risk_level = safe_get(project_metadata, "riskLevel", "Low")
+    submission_id = safe_get(state, "submissionId", "unknown")
     
     # 1. Fetch Dynamic Config
     from aigu.config import get_config
@@ -86,18 +92,22 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     # CRITICAL FIX: Enforce Physical File Presence
     # We must check if a file was actually uploaded, not just if text was extracted.
     uploaded_files = state.get("artifacts", {}).get("files", [])
-    # For now, we do a naive check: if required > 0, we expect files > 0
-    # In a more advanced version, we'd map specific files to specific artifacts (e.g. "design.pdf" -> "technicalDesign")
-    
     has_physical_files = len(uploaded_files) > 0
     
+    print(f"Librarian: Found {len(uploaded_files)} physical files in state.")
+
     for art in required_artifacts:
+        # Normalize key for LLM lookup (handle spaces/case)
         content = analysis.get(art)
-        
+        if not content:
+            # Fallback check for keys with spaces if LLM returned them that way
+            spaced_art = " ".join(re.findall('[A-Z][^A-Z]*|[a-z]+', art)).title()
+            content = analysis.get(spaced_art)
+
         # Check 1: Did the LLM find content?
         has_content = content and content != "Not Found" and len(str(content)) > 20
         
-        # Check 2 (NEW): Is there a physical file for this? (For Technical Design/Security)
+        # Check 2: Is there a physical file for this? (For Technical Design/Security)
         # We enforce this strictly for 'technicalDesign' and 'securityReview'
         requires_physical_file = art in ["technicalDesign", "securityReview", "complianceStatus"]
         
@@ -110,6 +120,7 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
                  print(f"Librarian: ALERT - Content found for {art} but NO physical files uploaded. Marking as MISSING.")
                  missing_artifacts.append(f"{art} (Physical File Required)")
         else:
+            # Check if it was already in artifacts (e.g. from previous run)
             if art not in new_artifacts or not new_artifacts.get(art):
                 missing_artifacts.append(art)
                 print(f"Librarian: Missing content for {art}")

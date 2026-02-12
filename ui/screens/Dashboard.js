@@ -452,7 +452,7 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                                 </Text>
                             ))}
                             {activeState.projectMetadata?.missingArtifacts?.map((m, i) => (
-                                <Text key={`missing-${i}`} style={{ ...theme.typography.body, color: theme.colors.textSecondary, marginVertical: 2, fontWeight: '600' }}>
+                                <Text key={`missing-${i}`} style={{ ...theme.typography.body, color: theme.colors.mode === 'dark' ? '#E2E8F0' : theme.colors.textSecondary, marginVertical: 2, fontWeight: '600' }}>
                                     • MISSING ARTIFACT: {m.replace(/([A-Z])/g, ' $1').trim()}
                                 </Text>
                             ))}
@@ -460,8 +460,8 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                     )}
 
                     {(status === 'Blocked' || activeState.projectMetadata?.missingArtifacts?.length > 0) && (
-                        <View style={{ marginTop: 24, padding: 20, borderRadius: 8, backgroundColor: theme.mode === 'dark' ? '#322d1c' : '#FFF9EB', borderLeftWidth: 4, borderLeftColor: theme.colors.warning }}>
-                            <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, fontWeight: '700', marginBottom: 8 }}>
+                        <View style={{ marginTop: 24, padding: 20, borderRadius: 8, backgroundColor: theme.mode === 'dark' ? '#2e2715' : '#FFF9EB', borderLeftWidth: 4, borderLeftColor: theme.colors.warning }}>
+                            <Text style={{ ...theme.typography.body, color: theme.mode === 'dark' ? '#FDE68A' : theme.colors.textPrimary, fontWeight: '700', marginBottom: 8 }}>
                                 ACTION REQUIRED: Re-Submission
                             </Text>
                             <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, marginBottom: 16 }}>
@@ -701,15 +701,15 @@ const getStatusColor = (status, theme) => {
         case 'Blocked':
             return theme.colors.error;
         case 'Cancelled':
-            return '#adb5bd'; // Neutral grey
+            return theme.mode === 'dark' ? '#64748B' : '#adb5bd';
         case 'In-Review':
         case 'InReview':
         case 'Draft':
-            return '#007bff';
+            return theme.colors.primary;
         case 'Pending':
             return theme.colors.warning;
         default:
-            return '#6c757d';
+            return theme.colors.textSecondary;
     }
 };
 

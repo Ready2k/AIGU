@@ -172,7 +172,8 @@ const AdminDashboard = ({ userId, onLogout }) => {
             case 'Blocked': return theme.colors.error;
             case 'In-Review':
             case 'Pending': return theme.colors.warning;
-            default: return '#6c757d';
+            case 'Draft': return theme.colors.primary;
+            default: return theme.colors.textSecondary;
         }
     };
 

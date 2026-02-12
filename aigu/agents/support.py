@@ -136,7 +136,7 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
         
         message = invoke_nova(
             prompt_object=prompt_tmpl,
-            messages=[{"role": "user", "content": f"State Summary:\n{context_str}"}],
+            messages=[{"role": "user", "content": f"State Summary:\n{context_str}\n\nUser Question/Feedback: Please make the output more user friendly and address the missing technical design artifact."}],
             state=prompt_state
         ).strip()
     except Exception as e:

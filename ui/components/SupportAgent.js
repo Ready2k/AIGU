@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import { useAiguState } from '../hooks/useAiguState';
+import MarkdownText from '../components/MarkdownText';
 
 /**
  * SupportAgent Component - Docked AI Assistant
@@ -195,14 +196,14 @@ const SupportAgent = ({ state, onClose, actions: providedActions, contextOverrid
                             }
                         ]}
                     >
-                        <Text style={{
+                        <MarkdownText style={{
                             ...theme.typography.body,
                             color: message.role === 'user' ? '#FFF' : theme.colors.textPrimary,
                             fontSize: 13,
                             lineHeight: 18
                         }}>
                             {message.content}
-                        </Text>
+                        </MarkdownText>
                         <Text style={{
                             fontSize: 9,
                             color: message.role === 'user'

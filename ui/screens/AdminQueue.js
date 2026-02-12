@@ -688,12 +688,12 @@ const getStatusColor = (status, theme) => {
         case 'In-Review':
         case 'InReview':
         case 'Draft':
-            return '#007bff';
+            return theme.colors.primary;
         case 'Pending':
             return theme.colors.warning;
         case 'Pilot-Active':
             return theme.colors.accent;
-        default: return '#6c757d';
+        default: return theme.colors.textSecondary;
     }
 };
 
@@ -711,7 +711,7 @@ const styles = StyleSheet.create({
         marginBottom: 24,
         paddingBottom: 16,
         borderBottomWidth: 2,
-        borderBottomColor: '#e0e0e0'
+        borderBottomColor: theme.colors.border
     },
     refresh: {
         padding: 12,
@@ -729,7 +729,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(40, 167, 69, 0.05)',
         borderRadius: 12,
         borderWidth: 2,
-        borderColor: '#28a745',
+        borderColor: theme.colors.success,
         borderStyle: 'dashed'
     },
     card: {

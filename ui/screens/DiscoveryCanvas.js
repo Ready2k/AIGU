@@ -174,7 +174,7 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
 
                 <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
                     {/* Project Name Field */}
-                    <Text style={styles.label}>{fieldLabels.projectName} *</Text>
+                    <Text style={[styles.label, { color: theme.colors.textSecondary }]}>{fieldLabels.projectName} *</Text>
                     <TextInput
                         style={[styles.input, { backgroundColor: theme.colors.background, color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
                         placeholder="e.g. Marketing GenAI Accelerator"
@@ -186,7 +186,7 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
 
                     {!hasGaps && (
                         <>
-                            <Text style={styles.label}>Initial Brief / Description</Text>
+                            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Initial Brief / Description</Text>
                             <TextInput
                                 style={[styles.textArea, { backgroundColor: theme.colors.background, color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
                                 placeholder="Describe your use case..."
@@ -218,14 +218,14 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
 
                                 return (
                                     <View key={key} style={styles.fieldWrapper}>
-                                        <Text style={[styles.label, isCritical && { color: theme.colors.primary }]}>
+                                        <Text style={[styles.label, { color: isCritical ? theme.colors.primary : theme.colors.textSecondary }]}>
                                             {fieldLabels[key]} {isCritical && '*'}
                                         </Text>
 
                                         {help && (
-                                            <View style={styles.helpBox}>
-                                                <Text style={styles.helpText}>{help.helpText}</Text>
-                                                <Text style={styles.helpExample}>Example: {help.contextualExample}</Text>
+                                            <View style={[styles.helpBox, { backgroundColor: theme.mode === 'dark' ? 'rgba(62, 123, 250, 0.15)' : 'rgba(0,123,255,0.05)', borderLeftColor: theme.colors.primary }]}>
+                                                <Text style={[styles.helpText, { color: theme.colors.textSecondary }]}>{help.helpText}</Text>
+                                                <Text style={[styles.helpExample, { color: theme.colors.primary }]}>Example: {help.contextualExample}</Text>
                                             </View>
                                         )}
 
@@ -250,14 +250,14 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
 
                     {projectMetadata.riskLevel && (
                         <View style={[styles.complianceCard, { backgroundColor: theme.mode === 'dark' ? '#1c2532' : '#F0F7FF', borderColor: theme.colors.primary }]}>
-                            <Text style={styles.complianceHeader}>📋 Compliance Outlook (Heads Up)</Text>
-                            <Text style={styles.complianceSub}>Preliminary Risk: {projectMetadata.riskLevel}</Text>
+                            <Text style={[styles.complianceHeader, { color: theme.colors.primary }]}>📋 Compliance Outlook (Heads Up)</Text>
+                            <Text style={[styles.complianceSub, { color: theme.colors.textPrimary, opacity: 0.9 }]}>Preliminary Risk: {projectMetadata.riskLevel}</Text>
                             <View style={styles.docList}>
                                 {(governance.requiredDocsPreview || []).map((doc, i) => (
-                                    <Text key={i} style={styles.docItem}>• {doc}</Text>
+                                    <Text key={i} style={[styles.docItem, { color: theme.colors.textPrimary }]}>• {doc}</Text>
                                 ))}
                             </View>
-                            <Text style={styles.complianceNote}>Note: Mandatory sections will be finalized by the Librarian later.</Text>
+                            <Text style={[styles.complianceNote, { color: theme.colors.textSecondary, opacity: 0.8 }]}>Note: Mandatory sections will be finalized by the Librarian later.</Text>
                         </View>
                     )}
 
@@ -318,14 +318,14 @@ const styles = StyleSheet.create({
     fieldWrapper: { marginBottom: 16 },
     errorBox: { padding: 16, borderRadius: 8, borderWidth: 1, marginBottom: 20, backgroundColor: 'rgba(255,0,0,0.05)' },
     helpBox: { padding: 10, backgroundColor: 'rgba(0,123,255,0.05)', borderRadius: 6, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#007bff' },
-    helpText: { fontSize: 12, color: '#666', fontStyle: 'italic' },
+    helpText: { fontSize: 12, fontStyle: 'italic' },
     helpExample: { fontSize: 12, color: '#007bff', marginTop: 2, fontWeight: '600' },
     complianceCard: { marginTop: 20, padding: 16, borderRadius: 10, borderWidth: 1, borderStyle: 'dotted' },
-    complianceHeader: { fontSize: 14, fontWeight: '700', color: '#007bff', marginBottom: 4 },
-    complianceSub: { fontSize: 12, fontWeight: '600', marginBottom: 8, opacity: 0.8 },
+    complianceHeader: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
+    complianceSub: { fontSize: 12, fontWeight: '600', marginBottom: 8 },
     docList: { marginBottom: 10 },
     docItem: { fontSize: 13, marginBottom: 2, fontWeight: '500' },
-    complianceNote: { fontSize: 11, fontStyle: 'italic', opacity: 0.6 },
+    complianceNote: { fontSize: 11, fontStyle: 'italic' },
     button: { paddingVertical: 18, paddingHorizontal: 24, borderRadius: 8, alignItems: 'center', marginTop: 24 },
     buttonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15, letterSpacing: 1 }
 });
