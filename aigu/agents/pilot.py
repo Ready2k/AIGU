@@ -32,7 +32,8 @@ def pilot_agent(state: GlobalState) -> GlobalState:
     Returns:
         Updated state with pilot phase configuration
     """
-    print("🧪 Pilot Agent: Configuring pilot phase...")
+    risk_level = state.get("projectMetadata", {}).get("riskLevel", "Med")
+    print(f"🧪 Pilot Agent: Operating under {risk_level} Risk Guardrails.")
     
     # Extract project data
     project_metadata = state.get("projectMetadata", {})

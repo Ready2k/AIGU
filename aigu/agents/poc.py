@@ -29,7 +29,8 @@ def poc_agent(state: GlobalState) -> GlobalState:
     Returns:
         Updated state with POC validation results
     """
-    print("🔬 POC Agent: Validating proof-of-concept requirements...")
+    risk_level = state.get("projectMetadata", {}).get("riskLevel", "Med")
+    print(f"🔬 POC Agent: Operating under {risk_level} Risk Guardrails.")
     
     # Extract project metadata
     project_metadata = state.get("projectMetadata", {})
