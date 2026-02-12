@@ -11,6 +11,7 @@ import LogViewer from './LogViewer';
 import AttachmentManager from '../components/AttachmentManager';
 import ResponsiveWrapper from '../components/ResponsiveWrapper';
 import { getShadow } from '../utils/shadows';
+import MarkdownText from '../components/MarkdownText';
 
 const defaultIntakeData = {};
 
@@ -432,9 +433,9 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                             <Text style={{ ...theme.typography.subheader, color: theme.colors.primary, marginBottom: 8 }}>
                                 🧠 Assistant Guidance
                             </Text>
-                            <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, lineHeight: 20 }}>
+                            <MarkdownText style={{ ...theme.typography.body, color: theme.colors.textPrimary, lineHeight: 20 }}>
                                 {activeState.ui_overlay.supportMessage}
-                            </Text>
+                            </MarkdownText>
                         </View>
                     )}
 

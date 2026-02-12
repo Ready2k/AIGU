@@ -8,6 +8,7 @@ import PromptManager from '../components/PromptManager';
 import FileManager from '../components/FileManager';
 import AgentCommandCenter from '../components/AgentCommandCenter';
 import { getShadow } from '../utils/shadows';
+import MarkdownText from '../components/MarkdownText';
 
 /**
  * AdminDashboard Component - Desktop-Optimized Admin Interface
@@ -210,9 +211,9 @@ const AdminDashboard = ({ userId, onLogout }) => {
                         <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '700', marginBottom: 8 }}>
                             🧠 AGENT REASONING & GUIDANCE
                         </Text>
-                        <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, lineHeight: 20 }}>
+                        <MarkdownText style={{ ...theme.typography.body, color: theme.colors.textPrimary, lineHeight: 20 }}>
                             {selectedProject.ui_overlay.supportMessage}
-                        </Text>
+                        </MarkdownText>
                     </View>
                 )}
 
