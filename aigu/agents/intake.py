@@ -25,13 +25,16 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     existing_stage = existing_metadata.get("currentStage", "Intake")
     
     # 1. Multi-Stage Support: If project is already past Intake, pass through
-    # [FIX] Respect Admin Approval: If admin approved, do not re-evaluate to Blocked/Draft
-    if state.get("governance", {}).get("adminApproved"):
-        print("Intake: Project is Admin Approved. Bypassing re-evaluation.")
+    # [FIX] Respect Admin Action: If admin requested info or approved, bypass re-evaluation
+    gov_state = state.get("governance", {})
+    if gov_state.get("adminAction") == "ADMIN_REQUEST_INFO" or gov_state.get("adminApproved"):
+        print("Intake: Admin Action detected. Bypassing re-evaluation.")
         return {
             "projectMetadata": existing_metadata,
             "auditLog": state.get("auditLog", []),
-            "governance": state.get("governance", {})
+            "governance": gov_state,
+            "artifacts": state.get("artifacts", {}),
+            "chainOfThought": state.get("chainOfThought", [])
         }
 
     if existing_stage != "Intake" and existing_metadata.get("path") in ["Accelerator", "Standard"]:

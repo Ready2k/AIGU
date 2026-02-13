@@ -8,6 +8,18 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     """
     Risk & Triage Agent.
     """
+    # [FIX] Respect Admin Action: If admin requested info or approved, bypass
+    gov_state = state.get("governance", {})
+    if gov_state.get("adminAction") == "ADMIN_REQUEST_INFO" or gov_state.get("adminApproved"):
+        print("Risk: Admin Action detected. Bypassing model assessment.")
+        return {
+            "projectMetadata": state.get("projectMetadata", {}),
+            "governance": gov_state,
+            "auditLog": state.get("auditLog", []),
+            "chainOfThought": state.get("chainOfThought", []),
+            "ui_overlay": state.get("ui_overlay", {})
+        }
+
     project_metadata = state.get("projectMetadata", {})
     description = state.get("artifacts", {}).get("intakeData", {}).get("description", "")
     path = project_metadata.get("path", "Stop")

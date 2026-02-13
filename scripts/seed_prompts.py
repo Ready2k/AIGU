@@ -4,7 +4,14 @@ try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    print("python-dotenv not installed, skipping .env loading")
+    print("python-dotenv not installed, using manual .env loading")
+    # Manual .env parser for test resilience
+    if os.path.exists(".env"):
+        with open(".env") as f:
+            for line in f:
+                if "=" in line and not line.startswith("#"):
+                    key, value = line.strip().split("=", 1)
+                    os.environ[key] = value.strip('"' )
 
 # Prompts Content
 PROMPTS = {
@@ -108,20 +115,28 @@ Your output should be a concise paragraph of 2-4 sentences, suitable for a profe
 
 def seed_prompts():
     print("Initiating Prompt Push to LangFuse...")
+    public_key = os.environ.get("LANGFUSE_PUBLIC_KEY")
+    secret_key = os.environ.get("LANGFUSE_SECRET_KEY")
+    host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
+
+    if not public_key or not secret_key:
+        print("❌ Error: LANGFUSE_PUBLIC_KEY or LANGFUSE_SECRET_KEY not set in environment.")
+        return
+
     try:
         langfuse = Langfuse(
-            public_key=os.environ.get("LANGFUSE_PUBLIC_KEY"),
-            secret_key=os.environ.get("LANGFUSE_SECRET_KEY"),
-            host=os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
+            public_key=public_key,
+            secret_key=secret_key,
+            host=host
         )
     except Exception as e:
-        print(f"Failed to initialize LangFuse client: {e}")
+        print(f"❌ Failed to initialize LangFuse client: {e}")
         return
 
     for name, content in PROMPTS.items():
         print(f"Processing prompt '{name}'...")
         try:
-            # Create prompt using the standard SDK method
+            # [FIX] Use create_prompt directly on the client instance (v2 SDK pattern)
             langfuse.create_prompt(
                 name=name,
                 prompt=content,

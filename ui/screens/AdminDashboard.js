@@ -537,8 +537,8 @@ const AdminDashboard = ({ userId, onLogout }) => {
             {/* Request Info Modal */}
             {requestInfoModal && (
                 <Modal transparent visible={!!requestInfoModal} animationType="fade">
-                    <View style={styles.modalOverlay}>
-                        <View style={[styles.modalContent, { backgroundColor: '#1E1E1E', borderColor: theme.colors.border }]}>
+                    <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.85)' }]}>
+                        <View style={[styles.modalContent, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
                             <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, marginBottom: 16 }}>
                                 Request Additional Information
                             </Text>
@@ -547,7 +547,7 @@ const AdminDashboard = ({ userId, onLogout }) => {
                             </Text>
                             <TextInput
                                 style={[styles.feedbackInput, {
-                                    backgroundColor: 'rgba(0,0,0,0.2)',
+                                    backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
                                     color: theme.colors.textPrimary,
                                     borderColor: theme.colors.border
                                 }]}
@@ -651,7 +651,10 @@ const AdminDashboard = ({ userId, onLogout }) => {
 
 // Helper Components
 const StatCard = ({ label, value, color, theme }) => (
-    <View style={[styles.statCard, { borderLeftColor: color, backgroundColor: 'rgba(255,255,255,0.05)' }]}>
+    <View style={[styles.statCard, {
+        borderLeftColor: color,
+        backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'
+    }]}>
         <Text style={{ fontSize: 24, fontWeight: '700', color: theme.colors.textPrimary }}>{value}</Text>
         <Text style={{ fontSize: 10, color: theme.colors.textSecondary, marginTop: 2 }}>{label}</Text>
     </View>

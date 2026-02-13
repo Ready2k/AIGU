@@ -148,8 +148,24 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         "adminMessage": msg,
                         "blockers": [f"Admin Request: {msg}"]
                     })
-                
-                graph_input["governance"] = new_gov
+                    
+                    # [NEW] Persist in Audit Log so it appears in the WorkflowProgress timeline
+                    from datetime import datetime, timezone
+                    from aigu.utils import generate_audit_signature, get_current_user_identity
+                    
+                    audit_entry = {
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "agent": "Admin",
+                        "action": "Information Requested",
+                        "reason": msg,
+                        "userIdentity": get_current_user_identity()
+                    }
+                    audit_entry["signature"] = generate_audit_signature(audit_entry)
+                    
+                    new_audit_log = current_state.get("auditLog", []).copy()
+                    new_audit_log.append(audit_entry)
+                    graph_input["auditLog"] = new_audit_log
+                    graph_input["governance"] = new_gov
             elif agent == "outcome" or agent == "handover":
                 graph_input["governance"] = {"status": "Approved" if inner_payload.get("scopeAck") else "Blocked"}
             elif agent == "production":
