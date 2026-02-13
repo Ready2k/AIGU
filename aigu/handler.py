@@ -938,7 +938,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 return {
                     "statusCode": 200,
                     "headers": headers,
-                    "body": json.dumps({"success": True, "status": "Cancelled", "auditEntry": audit_entry})
+                    "body": json.dumps(item, default=str)
                 }
             except Exception as e:
                 print(f"Error cancelling project: {e}")
