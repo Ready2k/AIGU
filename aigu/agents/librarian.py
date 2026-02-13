@@ -157,12 +157,17 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     new_project_metadata["artifactsValid"] = artifacts_valid
     new_project_metadata["missingArtifacts"] = missing_artifacts
     
+    if artifacts_valid:
+        new_project_metadata["currentStage"] = "Gatekeeper"
+    
     # 7. Handle Rejection (Block) if artifacts are missing
     new_governance = state.get("governance", {}).copy()
     if not artifacts_valid:
         print(f"Librarian: Rejecting project {submission_id} due to missing content for: {missing_artifacts}")
         new_governance["status"] = "Blocked"
         new_governance["blockers"] = [f"Missing Content: {art}" for art in missing_artifacts]
+    else:
+        new_governance["status"] = "In-Review"
     
     # CoT Appending
     cot_entry = {

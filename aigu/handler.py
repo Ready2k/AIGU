@@ -688,10 +688,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 status = item.get('governance', {}).get('status', 'Unknown')
                 print(f"  - Project {item.get('submissionId')}: status={status}")
             
-            # Filter for Reviewable items (Draft, Pending, In-Review, Blocked)
+            # Filter for active governance items
             review_queue = [
                 item for item in items 
-                if item.get('governance', {}).get('status') in ['Draft', 'Pending', 'In-Review', 'Blocked', 'Approved', 'Live']
+                if item.get('governance', {}).get('status') in ['Draft', 'Pending', 'In-Review', 'Under Review', 'Blocked', 'Approved', 'Live', 'Risk']
             ]
             
             print(f"Admin Queue: Filtered to {len(review_queue)} reviewable items")

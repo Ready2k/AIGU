@@ -57,6 +57,7 @@ const AdminDashboard = ({ userId, onLogout }) => {
     const refreshQueue = async () => {
         setLoading(true);
         const data = await actions.fetchAdminQueue();
+        console.log("Admin Dashboard: Fetched projects:", data.map(p => p.projectMetadata?.name || p.submissionId));
         setQueue(data);
 
         // Auto-select first item if none selected and on desktop
@@ -162,8 +163,10 @@ const AdminDashboard = ({ userId, onLogout }) => {
 
     // Filter queue
     const filteredQueue = queue.filter(item => {
-        const matchesSearch = item.projectMetadata?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item.submissionId.toLowerCase().includes(searchQuery.toLowerCase());
+        const name = item.projectMetadata?.name || '';
+        const sid = item.submissionId || '';
+        const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            sid.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesFilter = filterStatus === 'All' || item.governance?.status === filterStatus;
         return matchesSearch && matchesFilter;
     });
@@ -431,7 +434,7 @@ const AdminDashboard = ({ userId, onLogout }) => {
                         {/* Filter Buttons */}
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
                             <View style={styles.filterContainer}>
-                                {['All', 'In-Review', 'Blocked', 'Approved'].map(filter => (
+                                {['All', 'Draft', 'Pending', 'Risk', 'In-Review', 'Blocked', 'Approved'].map(filter => (
                                     <TouchableOpacity
                                         key={filter}
                                         style={[

@@ -25,6 +25,15 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     existing_stage = existing_metadata.get("currentStage", "Intake")
     
     # 1. Multi-Stage Support: If project is already past Intake, pass through
+    # [FIX] Respect Admin Approval: If admin approved, do not re-evaluate to Blocked/Draft
+    if state.get("governance", {}).get("adminApproved"):
+        print("Intake: Project is Admin Approved. Bypassing re-evaluation.")
+        return {
+            "projectMetadata": existing_metadata,
+            "auditLog": state.get("auditLog", []),
+            "governance": state.get("governance", {})
+        }
+
     if existing_stage != "Intake" and existing_metadata.get("path") in ["Accelerator", "Standard"]:
         return {
             "projectMetadata": existing_metadata,
@@ -172,7 +181,7 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     elif not is_intake_complete:
         new_metadata["currentStage"] = "Intake" # Stay in Intake until complete
     elif path == "Accelerator":
-        new_metadata["currentStage"] = "POC"
+        new_metadata["currentStage"] = "Risk" # Accelerator still goes to Risk first in graph
     else:
         new_metadata["currentStage"] = "Risk"
 
@@ -205,8 +214,9 @@ def intake_orchestrator(state: GlobalState) -> Dict[str, Any]:
     elif not is_intake_complete:
         new_governance["status"] = "Draft"
         new_governance["blockers"] = critical_gaps + validation_errors
-    elif not new_governance.get("status") or new_governance.get("status") == "New":
-        new_governance["status"] = "Draft"
+    else:
+        # If complete and not stopped, it's Pending review by Risk
+        new_governance["status"] = "Pending"
 
     # CoT Appending
     cot_entry = {

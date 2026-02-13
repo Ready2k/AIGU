@@ -178,11 +178,15 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
     new_chain_of_thought = state.get("chainOfThought", []).copy()
     new_chain_of_thought.append(cot_entry)
 
-    # 4. UI Overlay Update
-    new_ui_overlay = state.get("ui_overlay", {}).copy()
-    new_ui_overlay["adminAnalysis"] = thought_process
+    # Update metadata stage
+    new_metadata = project_metadata.copy()
+    if new_status in ["Approved", "Live", "Production-Ready"]:
+        new_metadata["currentStage"] = "Handover"
+    else:
+        new_metadata["currentStage"] = "Gatekeeper"
     
     return {
+        "projectMetadata": new_metadata,
         "governance": new_governance,
         "artifacts": {**artifacts, "complianceStatus": new_compliance},
         "auditLog": new_audit_log,

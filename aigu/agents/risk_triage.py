@@ -13,6 +13,17 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     path = project_metadata.get("path", "Stop")
     submission_id = state.get("submissionId", "unknown")
     
+    # [FIX] Respect Admin Approval
+    if state.get("governance", {}).get("adminApproved"):
+        print("Risk: Project is Admin Approved. Bypassing risk re-evaluation.")
+        return {
+            "projectMetadata": project_metadata,
+            "governance": state.get("governance", {}),
+            "auditLog": state.get("auditLog", []),
+            "chainOfThought": state.get("chainOfThought", []),
+            "ui_overlay": state.get("ui_overlay", {})
+        }
+    
     # 1. Fetch Dynamic Config
     from aigu.config import get_config
     risk_config = get_config("risk_agent")
@@ -99,8 +110,15 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     new_governance["slaDeadline"] = sla_deadline_str
     
     if path == "Standard":
-        new_governance["status"] = "Approved"
-        thought_process += "\n\nStandard path detected: Project Auto-Approved per governance rules."
+        new_governance["status"] = "In-Review"
+        new_metadata["currentStage"] = "Librarian"
+        thought_process += "\n\nStandard path detected: Project moves to Librarian stage."
+    elif path == "Accelerator":
+        new_governance["status"] = "In-Review"
+        new_metadata["currentStage"] = "POC"
+    else:
+        new_governance["status"] = "In-Review"
+        new_metadata["currentStage"] = "Librarian" # Standard default next step
     
     # 3. Persistence & Audit
     s3_uri = upload_reasoning_to_s3(submission_id, "Risk & Triage", thought_process)

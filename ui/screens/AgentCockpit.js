@@ -37,14 +37,27 @@ const AgentCockpit = ({ route, navigation }) => {
         try {
             // 1. Fetch Queue
             const allProjects = await signedFetch('/admin/list');
+            console.log(`[Cockpit] Fetched ${allProjects.length} projects for role: ${role}`);
+
             let filtered = [];
             if (role === 'risk_triage') {
-                filtered = allProjects.filter(p => !p.governance?.status || p.projectMetadata?.currentStage === 'Risk');
+                // Risk users should see everything that is at the Risk stage OR is still a Draft
+                filtered = allProjects.filter(p =>
+                    p.projectMetadata?.currentStage === 'Risk' ||
+                    p.governance?.status === 'Draft' ||
+                    p.governance?.status === 'New' ||
+                    !p.governance?.status
+                );
             } else if (role === 'librarian') {
-                filtered = allProjects.filter(p => p.governance?.status === 'Under Review' || p.projectMetadata?.currentStage === 'Intake');
+                filtered = allProjects.filter(p =>
+                    p.governance?.status === 'Under Review' ||
+                    p.projectMetadata?.currentStage === 'Librarian' ||
+                    p.projectMetadata?.currentStage === 'Intake'
+                );
             } else {
                 filtered = allProjects;
             }
+            console.log(`[Cockpit] Filtered to ${filtered.length} projects`);
             setProjects(filtered);
 
             // 2. Fetch Config
