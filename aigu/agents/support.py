@@ -70,6 +70,15 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
     # Extract missing artifacts from projectMetadata (set by Librarian)
     missing_artifacts_list = project_metadata.get('missingArtifacts', [])
     
+    # Extract Admin Message if blocked by admin
+    admin_message = governance.get('adminMessage')
+    if not admin_message and status == 'Blocked':
+        # Fallback to check blockers list for Admin Request
+        for b in blockers:
+            if "Admin Request:" in b:
+                admin_message = b.replace("Admin Request:", "").strip()
+                break
+    
     # Extract risk reasoning from audit log (from Risk & Triage agent)
     risk_level = project_metadata.get('riskLevel', '')
     risk_reasoning = "No specific reasoning recorded."
@@ -158,6 +167,7 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
     return {
         "ui_overlay": {
             "supportMessage": message,
+            "adminFeedback": admin_message, 
             "showBlockerAlert": len(governance.get("blockers", [])) > 0,
             "slaDisplay": governance.get("slaDeadline", "TBD"),
             "reasoningUrls": presigned_urls # Map: s3_uri -> https://presigned-url...

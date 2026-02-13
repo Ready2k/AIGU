@@ -1118,7 +1118,27 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 
                 # Write Back
                 state_table.put_item(Item=item)
-                
+
+                # [CRITICAL UPDATE] Trigger Graph Resumption
+                try:
+                    print(f"Triggering graph resumption for override on {target_id}")
+                    from aigu.graph import app
+                    
+                    config = {"configurable": {"thread_id": target_id}}
+                    
+                    # Force update the state in LangGraph to match DynamoDB
+                    # Use 'risk_triage' as the resumption point if status is overridden
+                    app.update_state(config, {
+                        "governance": {"status": new_status},
+                        "projectMetadata": {"riskLevel": new_risk} if new_risk else {}
+                    }, as_node="risk_triage") # Resuming from Risk Triage allows the router to see the new status
+                    
+                    # Invoke graph to process the new state
+                    app.invoke(None, config)
+                    
+                except Exception as graph_err:
+                    print(f"Warning: Failed to resume graph after override: {graph_err}")
+
                 return {
                     "statusCode": 200,
                     "headers": headers,

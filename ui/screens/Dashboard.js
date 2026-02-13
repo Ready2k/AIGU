@@ -42,6 +42,9 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
     const [activeDraft, setActiveDraft] = useState(null);
     const [currentFiles, setCurrentFiles] = useState([]);
 
+    // Admin Feedback Modal
+    const [adminFeedbackModal, setAdminFeedbackModal] = useState(null);
+
     // Mock actions - replace with actual useAiguState hook
     const actions = {
         fetchSessions: async (uid) => {
@@ -110,6 +113,16 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
     useEffect(() => {
         if (liveState && activeSessionId) {
             setActiveState(liveState);
+
+            // Check for Admin Feedback to display
+            if (liveState.governance?.status === 'Blocked') {
+                const msg = liveState.ui_overlay?.adminFeedback || liveState.governance?.adminMessage;
+                // Only show if we haven't shown it this session or if it's a fresh load
+                // For now, simpler: show if present and not explicitly dismissed in this component instance temp state
+                if (msg && !adminFeedbackModal) {
+                    setAdminFeedbackModal(msg);
+                }
+            }
 
             const currentId = activeSessionId;
             const newId = liveState.submissionId;
@@ -209,6 +222,14 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
         const session = sessions.find(s => s.submissionId?.toLowerCase() === searchId);
         if (session) {
             setActiveState(session);
+
+            // Pop Admin Feedback if applicable on load
+            if (session.governance?.status === 'Blocked') {
+                const msg = session.ui_overlay?.adminFeedback || session.governance?.adminMessage;
+                if (msg) {
+                    setAdminFeedbackModal(msg);
+                }
+            }
         }
     };
 
@@ -688,6 +709,38 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                     <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 18 }}>💬</Text>
                 </TouchableOpacity>
             )}
+
+            {/* Admin Feedback Modal */}
+            {adminFeedbackModal && (
+                <View style={[styles.modalOverlay, { zIndex: 3000, elevation: 3000 }]}>
+                    <View style={[styles.modalContent, theme.glass, { borderColor: theme.colors.error, borderLeftWidth: 6 }]}>
+                        <Text style={{ ...theme.typography.header, color: theme.colors.error, marginBottom: 16 }}>
+                            🛑 Action Required: Admin Request
+                        </Text>
+                        <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, marginBottom: 20, fontSize: 16 }}>
+                            {adminFeedbackModal}
+                        </Text>
+                        <MarkdownText style={{ ...theme.typography.body, color: theme.colors.textPrimary, marginBottom: 20 }}>
+                            An administrator has requested additional information or changes. Please update your project and re-submit.
+                        </MarkdownText>
+                        <TouchableOpacity
+                            style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
+                            onPress={() => {
+                                setAdminFeedbackModal(null);
+                                setIsRemediating(true); // Auto-open edit mode
+                            }}
+                        >
+                            <Text style={{ color: '#FFF', fontWeight: '700' }}>Review & Edit Project</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={{ padding: 12, alignItems: 'center', marginTop: 8 }}
+                            onPress={() => setAdminFeedbackModal(null)}
+                        >
+                            <Text style={{ color: theme.colors.textSecondary }}>Dismiss</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
         </View>
     );
 };
@@ -797,6 +850,32 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 6
+    },
+    modalOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20
+    },
+    modalContent: {
+        width: '90%',
+        maxWidth: 500,
+        backgroundColor: '#1E1E1E', // Fallback
+        padding: 28,
+        borderRadius: 16,
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 10,
+        },
+        shadowOpacity: 0.5,
+        shadowRadius: 12,
+        elevation: 20
     },
     alertBox: {
         padding: 20,

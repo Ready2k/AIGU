@@ -535,7 +535,7 @@ const AdminDashboard = ({ userId, onLogout }) => {
             {requestInfoModal && (
                 <Modal transparent visible={!!requestInfoModal} animationType="fade">
                     <View style={styles.modalOverlay}>
-                        <View style={[styles.modalContent, theme.glass, { borderColor: theme.colors.border }]}>
+                        <View style={[styles.modalContent, { backgroundColor: '#1E1E1E', borderColor: theme.colors.border }]}>
                             <Text style={{ ...theme.typography.header, color: theme.colors.textPrimary, marginBottom: 16 }}>
                                 Request Additional Information
                             </Text>
@@ -788,16 +788,20 @@ const styles = StyleSheet.create({
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.7)',
+        backgroundColor: 'rgba(0,0,0,0.85)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20
+        padding: 20,
+        zIndex: 2000, // Ensure it sits on top of everything
+        elevation: 2000
     },
     modalContent: {
         width: '90%',
         maxWidth: 500,
         padding: 24,
         borderRadius: 16,
+        zIndex: 2001,
+        elevation: 2001,
         borderWidth: 1
     },
     feedbackInput: {

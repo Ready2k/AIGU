@@ -342,13 +342,31 @@ const AgentCockpit = ({ route, navigation }) => {
                         <Text style={{ ...theme.typography.h3, marginBottom: 16, color: theme.colors.textPrimary }}>Manual Intervention</Text>
 
                         <Text style={[styles.label, { color: theme.colors.textSecondary }]}>New Status</Text>
-                        <TextInput
-                            style={[styles.input, { borderColor: theme.colors.border, color: theme.colors.textPrimary }]}
-                            placeholder="e.g. Approved"
-                            placeholderTextColor={theme.colors.textSecondary}
-                            value={newStatus}
-                            onChangeText={setNewStatus}
-                        />
+
+                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                            {['Approved', 'Under Review', 'Blocked'].map((status) => (
+                                <TouchableOpacity
+                                    key={status}
+                                    onPress={() => setNewStatus(status)}
+                                    style={{
+                                        paddingVertical: 8,
+                                        paddingHorizontal: 12,
+                                        borderRadius: 4,
+                                        backgroundColor: newStatus === status ? getStatusColor(status, theme) : theme.colors.background,
+                                        borderWidth: 1,
+                                        borderColor: newStatus === status ? 'transparent' : theme.colors.border
+                                    }}
+                                >
+                                    <Text style={{
+                                        color: newStatus === status ? '#FFF' : theme.colors.textSecondary,
+                                        fontSize: 12,
+                                        fontWeight: 'bold'
+                                    }}>
+                                        {status === 'Approved' ? 'Next Stage' : status === 'Under Review' ? 'Regress' : 'Reject'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
 
                         <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Risk Level (Optional)</Text>
                         <TextInput

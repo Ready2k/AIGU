@@ -52,6 +52,14 @@ def build_aigu_graph():
         """
         Risk Triage Router: Evaluates path and risk level.
         """
+        governance = state.get("governance", {})
+        status = governance.get("status")
+        
+        # [OVERRIDE CHECK]
+        if status in ["Blocked", "Rejected"]:
+            print(f"  → Project is {status}: Routing to Support")
+            return "support"
+
         metadata = state.get("projectMetadata", {})
         path = metadata.get("path", "Standard") # Default to standard if not set
         
