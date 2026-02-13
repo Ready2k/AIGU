@@ -130,8 +130,10 @@ case $ACTION in
       start_ui
     fi 
     ;;
-  teardown) aws cloudformation delete-stack --stack-name ${STACK_BASE}-gateway --region ${REGION} --region ${REGION}
-            aws cloudformation delete-stack --stack-name ${STACK_BASE}-logic --region ${REGION}
-            aws cloudformation delete-stack --stack-name ${STACK_BASE}-persistence --region ${REGION} ;;
+  teardown)
+    aws cloudformation delete-stack --stack-name ${STACK_BASE}-gateway --region ${REGION}
+    aws cloudformation delete-stack --stack-name ${STACK_BASE}-logic --region ${REGION}
+    aws cloudformation delete-stack --stack-name ${STACK_BASE}-persistence --region ${REGION}
+    ;;
   *)        echo "Usage: $0 {deploy|test|logs|ui|teardown}" ;;
 esac
