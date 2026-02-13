@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, TextInput } from 'react-native';
 import { useAiguTheme } from '../theme/ThemeContext';
 import { useAiguState } from '../hooks/useAiguState';
@@ -109,19 +109,34 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
         });
     };
 
+    // Prevent recurring modals by tracking dismissed messages and project IDs
+    // We store a Set of `${submissionId}:${messageHash}` to be precise, or just `submissionId` if one message per project is enough.
+    // For now, let's track `submissionId` for the current session to supress the modal once dismissed.
+    const dismissedProjects = useRef(new Set());
+
     // Sync liveState to activeState when it changes
     useEffect(() => {
         if (liveState && activeSessionId) {
+
+            // CRITICAL FIX: Only update state if the liveState matches the currently active session
+            // This prevents stale data from a previous async fetch from overwriting the current view
+            if (String(liveState.submissionId).toLowerCase() !== String(activeSessionId).toLowerCase()) {
+                console.warn(`[Dashboard] Ignoring stale state for ${liveState.submissionId} while viewing ${activeSessionId}`);
+                return;
+            }
+
             setActiveState(liveState);
 
             // Check for Admin Feedback to display
             if (liveState.governance?.status === 'Blocked') {
                 const msg = liveState.ui_overlay?.adminFeedback || liveState.governance?.adminMessage;
-                // Only show if we haven't shown it this session or if it's a fresh load
-                // For now, simpler: show if present and not explicitly dismissed in this component instance temp state
-                if (msg && !adminFeedbackModal) {
+                // Only show if present and NOT already dismissed for this SPECIFIC project
+                if (msg && !adminFeedbackModal && !dismissedProjects.current.has(liveState.submissionId)) {
                     setAdminFeedbackModal(msg);
                 }
+            } else {
+                // If not blocked, ensure modal is closed (e.g. if status changed to Approved while viewing)
+                if (adminFeedbackModal) setAdminFeedbackModal(null);
             }
 
             const currentId = activeSessionId;
@@ -156,6 +171,10 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
                 });
 
                 updateActiveSession(newId);
+                // Migrate dismissal if applicable
+                if (dismissedProjects.current.has(currentId)) {
+                    dismissedProjects.current.add(newId);
+                }
             }
             // 2. Normal Metadata Update
             else if (newId?.toLowerCase() === currentId?.toLowerCase()) {
@@ -215,6 +234,9 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
     };
 
     const loadProjectState = async (projectId) => {
+        // Clear any existing modal when switching projects to prevent leaks
+        setAdminFeedbackModal(null);
+
         updateActiveSession(projectId);
         setIsRemediating(false); // Reset UI state on project switch
 
@@ -226,7 +248,8 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
             // Pop Admin Feedback if applicable on load
             if (session.governance?.status === 'Blocked') {
                 const msg = session.ui_overlay?.adminFeedback || session.governance?.adminMessage;
-                if (msg) {
+                // Only show if not dismissed for this project
+                if (msg && !dismissedProjects.current.has(session.submissionId)) {
                     setAdminFeedbackModal(msg);
                 }
             }
@@ -713,31 +736,61 @@ const Dashboard = ({ userId, isAdmin, onLogout }) => {
             {/* Admin Feedback Modal */}
             {adminFeedbackModal && (
                 <View style={[styles.modalOverlay, { zIndex: 3000, elevation: 3000 }]}>
-                    <View style={[styles.modalContent, theme.glass, { borderColor: theme.colors.error, borderLeftWidth: 6 }]}>
-                        <Text style={{ ...theme.typography.header, color: theme.colors.error, marginBottom: 16 }}>
-                            🛑 Action Required: Admin Request
-                        </Text>
-                        <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, marginBottom: 20, fontSize: 16 }}>
-                            {adminFeedbackModal}
-                        </Text>
-                        <MarkdownText style={{ ...theme.typography.body, color: theme.colors.textPrimary, marginBottom: 20 }}>
-                            An administrator has requested additional information or changes. Please update your project and re-submit.
-                        </MarkdownText>
-                        <TouchableOpacity
-                            style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
-                            onPress={() => {
-                                setAdminFeedbackModal(null);
-                                setIsRemediating(true); // Auto-open edit mode
-                            }}
-                        >
-                            <Text style={{ color: '#FFF', fontWeight: '700' }}>Review & Edit Project</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={{ padding: 12, alignItems: 'center', marginTop: 8 }}
-                            onPress={() => setAdminFeedbackModal(null)}
-                        >
-                            <Text style={{ color: theme.colors.textSecondary }}>Dismiss</Text>
-                        </TouchableOpacity>
+                    <View style={[
+                        styles.modalContent,
+                        { backgroundColor: theme.colors.surface },
+                        theme.glass,
+                        {
+                            borderColor: theme.colors.error,
+                            borderLeftWidth: 8,
+                            maxHeight: '85%'
+                        }
+                    ]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <Text style={{ ...theme.typography.header, color: theme.colors.error, fontSize: 20 }}>
+                                🛑 Governance Action
+                            </Text>
+                            <TouchableOpacity onPress={() => setAdminFeedbackModal(null)}>
+                                <Text style={{ color: theme.colors.textSecondary, fontSize: 24 }}>×</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={{ marginBottom: 20 }} showsVerticalScrollIndicator={false}>
+                            <Text style={{ ...theme.typography.body, color: theme.colors.textPrimary, fontWeight: '700', marginBottom: 12, fontSize: 16 }}>
+                                Administrator Feedback:
+                            </Text>
+                            <View style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.05)', padding: 16, borderRadius: 8 }}>
+                                <MarkdownText style={{ ...theme.typography.body, color: theme.colors.textPrimary, lineHeight: 24 }}>
+                                    {adminFeedbackModal}
+                                </MarkdownText>
+                            </View>
+
+                            <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 20, fontStyle: 'italic' }}>
+                                AIGU System Note: Your project is currently blocked. Please review the feedback above, update your project artifacts or intake data, and submit a revision for re-evaluation.
+                            </Text>
+                        </ScrollView>
+
+                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                            <TouchableOpacity
+                                style={[styles.actionButton, { flex: 1, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.primary }]}
+                                onPress={() => {
+                                    if (activeSessionId) dismissedProjects.current.add(activeSessionId);
+                                    setAdminFeedbackModal(null);
+                                    setIsRemediating(true);
+                                }}
+                            >
+                                <Text style={{ color: theme.colors.primary, fontWeight: '700' }}>Review & Edit</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.actionButton, { flex: 1, backgroundColor: theme.colors.primary }]}
+                                onPress={() => {
+                                    if (activeSessionId) dismissedProjects.current.add(activeSessionId);
+                                    setAdminFeedbackModal(null);
+                                }}
+                            >
+                                <Text style={{ color: '#FFF', fontWeight: '700' }}>Got it</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             )}
@@ -865,7 +918,6 @@ const styles = StyleSheet.create({
     modalContent: {
         width: '90%',
         maxWidth: 500,
-        backgroundColor: '#1E1E1E', // Fallback
         padding: 28,
         borderRadius: 16,
         shadowColor: "#000",

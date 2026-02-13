@@ -168,10 +168,10 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
         elif 'biometric' in desc_lower:
              message = f"⚠️ Governance Warning: This project contains potential compliance violations (Biometric/HR Automations detected). {message}"
 
-    # B. Admin Strategy Message
+    # B. Admin Strategy Message (AI-Generated for SMEs)
     try:
         admin_prompt_tmpl = get_active_prompt("admin-support-agent", tag="production")
-        admin_message = invoke_nova(
+        ai_admin_analysis = invoke_nova(
             prompt_object=admin_prompt_tmpl,
             messages=system_messages,
             state=prompt_state
@@ -179,11 +179,11 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
     except Exception as e:
         print(f"Nova invocation failed for support (Admin): {e}")
         # Standard fallback for admin
-        admin_message = f"Admin Analysis: Project is {status} at stage {stage}."
+        ai_admin_analysis = f"Admin Analysis: Project is {status} at stage {stage}."
         if blockers_str != "None":
-            admin_message += f" Blockers: {blockers_str}."
+            ai_admin_analysis += f" Blockers: {blockers_str}."
         if risk_level:
-            admin_message += f" Assessed Risk: {risk_level}."
+            ai_admin_analysis += f" Assessed Risk: {risk_level}."
 
     # 3. Secure Reasoning Access (Hydrate Audit Log for Viewer)
     presigned_urls = {}
@@ -198,8 +198,9 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
     return {
         "ui_overlay": {
             "supportMessage": message,
-            "adminSupportMessage": admin_message,
-            "adminFeedback": admin_message, # Kept for backward compatibility if used in UI
+            "adminAnalysis": ai_admin_analysis,
+            "adminSupportMessage": ai_admin_analysis,
+            "adminFeedback": admin_message or message, # Human message takes priority, then fallback to user-safe AI message
             "showBlockerAlert": len(governance.get("blockers", [])) > 0,
             "slaDisplay": governance.get("slaDeadline", "TBD"),
             "reasoningUrls": presigned_urls # Map: s3_uri -> https://presigned-url...

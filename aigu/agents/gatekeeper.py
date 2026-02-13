@@ -128,6 +128,8 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
     new_audit_log.append(audit_entry)
     
     # 3. Notification Trigger (New: Task B Integration)
+    new_ui_overlay = state.get("ui_overlay", {}).copy()
+
     if new_status != current_status:
         from aigu.notifications import send_governance_email
         from aigu.agents.support import support_agent
@@ -140,8 +142,8 @@ def gatekeeper_agent(state: GlobalState) -> Dict[str, Any]:
             "auditLog": new_audit_log  # Crucial: Pass the new log so Support sees the reasoning
         }
         support_output = support_agent(temp_state)
-        ui_overlay = support_output.get("ui_overlay", {})
-        message = ui_overlay.get("supportMessage", "New governance status update.")
+        new_ui_overlay = support_output.get("ui_overlay", {})
+        message = new_ui_overlay.get("supportMessage", "New governance status update.")
         
         # Notify User
         user_email = state.get("userId", "user@company.com") # Should ideally be an email
