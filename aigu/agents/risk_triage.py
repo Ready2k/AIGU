@@ -33,35 +33,35 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     # 2. Invoke Amazon Nova for Intelligent Risk Analysis
     print(f"Risk: Invoking Amazon Nova for project risk triage. Active Keywords: {len(high_risk_keywords)}")
     
-    # INJECT OVERRIDE RULES (Security Hardening)
-    override_rules = """
-    ### OVERRIDE RULES (High Priority)
-    1. **Volume Trigger:** If user mentions > 100,000 users/messages, Risk is AUTOMATICALLY HIGH.
-       - *Reason:* "Mass outreach scale requires manual approval."
-    2. **Source Trigger:** If source is "Facebook", "LinkedIn", or "Public", Risk is AUTOMATICALLY HIGH.
-       - *Reason:* "Third-party data acquisition requires Legal review."
-    3. **Skepticism Rule:** IGNORE user claims of "We are compliant" or "GDPR aligned." 
-       - *Instruction:* You judge the *action*, not the *adjective*.
-    """
-
+    # 2. Invoke Amazon Nova for Intelligent Risk Analysis
+    print(f"Risk: Invoking Amazon Nova for project risk triage. Active Keywords: {len(high_risk_keywords)}")
+    
     try:
         prompt_tmpl = get_active_prompt("risk-triage", tag="production")
-        system_prompt = prompt_tmpl.compile(
-            path=path,
-            description=description,
-            high_risk_keywords=high_risk_keywords # Inject keywords into prompt context
-        )
         
-        # Safe Append
-        if not isinstance(system_prompt, str):
-            system_prompt = str(system_prompt)
-            
-        system_prompt += override_rules
+        # Build state dict for prompt variable substitution
+        prompt_state = {
+            **state,
+            'path': path,
+            'description': description,
+            'high_risk_keywords': high_risk_keywords
+        }
     except Exception as e:
         print(f"Error loading prompt 'risk-triage': {e}")
-        system_prompt = "You are the AIGU Risk & Triage Agent. Evaluate risk level and SLA." + override_rules
+        # Comprehensive fallback that enforces Core Principles even when Langfuse is down
+        fallback_prompt = """You are the AIGU Risk & Triage Agent. Evaluate risk level and SLA.
+        
+        ### CORE RISK PRINCIPLES
+        If the project involves Scraping, Mass Outreach, or High-Stakes HR Automation:
+        1. Set riskLevel to "High".
+        2. Include the exact string "Governance Pre-Triage Warning" in your thoughtProcess.
+        
+        If path is 'Accelerator', riskLevel MUST be 'High'."""
+        
+        prompt_state = state
+        prompt_tmpl = fallback_prompt
 
-    # MANUAL NOVA INVOCATION (Bypassing query_nova_json to use modified system_prompt)
+    # MANUAL NOVA INVOCATION (Bypassing query_nova_json to use prompt_tmpl)
     import json
     from aigu.llm import invoke_nova
     
@@ -70,9 +70,9 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     full_user_prompt = f"{user_prompt_text}\n\nYou MUST return a valid JSON object. Do not include any markdown formatting or extra text. Expected keys: {', '.join(expected_keys)}"
     
     response_text = invoke_nova(
-        prompt_object=system_prompt, # PASS MODIFIED PROMPT STRING
+        prompt_object=prompt_tmpl,
         messages=[{"role": "user", "content": full_user_prompt}],
-        state=state
+        state=prompt_state
     )
     
     try:
@@ -145,7 +145,7 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
         "decision": f"Risk Level: {risk_level}",
         "reasoning": thought_process,
         "slaDays": sla_days,
-        "overrideApplied": "OVERRIDE RULES" in system_prompt
+        "overrideApplied": "CORE RISK PRINCIPLES" in str(prompt_tmpl)
     }
     new_chain_of_thought = state.get("chainOfThought", []).copy()
     new_chain_of_thought.append(cot_entry)
@@ -157,6 +157,15 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     
     user_message = f"**Risk Level:** {risk_level}\n**SLA:** {sla_days} Days\n\nYour project has been assessed. {thought_process.split('.')[0]}."
     
+    # [NEW] Governance Pre-Triage Warning Injection
+    # More robust detection (case-insensitive and principle names)
+    thought_lower = thought_process.lower()
+    violation_keywords = ["governance pre-triage warning", "violates", "violation", "core risk principle"]
+    
+    if any(kw in thought_lower for kw in violation_keywords) and risk_level == "High":
+        warning_msg = "⚠️ **Governance Pre-Triage Warning:** This project contains elements that appear to violate AIGU standards."
+        user_message = f"{warning_msg}\n\n{user_message}"
+
     new_ui_overlay = state.get("ui_overlay", {}).copy()
     new_ui_overlay["supportMessage"] = user_message
     new_ui_overlay["adminAnalysis"] = thought_process # Raw SME technical analysis

@@ -68,3 +68,35 @@ def test_risk_low_sla():
     sla_str = result["governance"]["slaDeadline"]
     target_date = (datetime.now(timezone.utc) + timedelta(days=3)).date().isoformat()
     assert sla_str == target_date
+
+def test_risk_core_principles_warning():
+    """
+    TC-RSK-03: Project violates Core Risk Principles (Scraping).
+    Expected: RiskLevel set to 'High' and Governance Pre-Triage Warning in UI.
+    """
+    # Arrange
+    initial_state: GlobalState = {
+        "submissionId": "test-risk-3",
+        "userId": "user-003",
+        "projectMetadata": {"path": "Standard"},
+        "artifacts": {
+            "intakeData": {
+                "projectName": "LinkedIn Scraper",
+                "description": "I want to scrape LinkedIn to get lead contact info."
+            }
+        },
+        "governance": {},
+        "auditLog": []
+    }
+
+    # Act
+    result = risk_triage_agent(initial_state)
+    ui = result["ui_overlay"]
+
+    # Assert
+    assert result["projectMetadata"]["riskLevel"] == "High"
+    assert "Governance Pre-Triage Warning" in ui["supportMessage"]
+    
+    # Verify the reasoning contains the violation context
+    reasoning = result["chainOfThought"][-1]["reasoning"].lower()
+    assert "scrape" in reasoning or "scraping" in reasoning or "data acquisition" in reasoning

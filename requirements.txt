@@ -8,3 +8,4 @@ langchain
 pydantic
 langfuse
 langgraph-checkpoint-dynamodb
+python-dotenv
