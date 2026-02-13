@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List
 from aigu.state import GlobalState, AuditLogEntry
 from aigu.utils import upload_reasoning_to_s3, generate_audit_signature, get_current_user_identity
+import re
 from aigu.llm import query_nova_json
 
 # LangFuse Prompt: librarian_agent
@@ -70,10 +71,15 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     3. If content for an artifact (like 'technicalDesign' or 'securityReview') is found in the documents, summarize/extract it into that field.
     4. If no clear content is found for a required artifact, return an empty string or "Not Found" for that field.
     5. 'intakeData' should reflect the latest understanding, merged with new details.
+    6. 'adminAnalysis': A technical, SME-level critique of the submitted artifacts.
+       - Audience: Governance Administrator / Auditor.
+       - Tone: Objective, critical, technical. NO "You should...".
+       - Content: Evaluate the quality/completeness of the found artifacts. Mention specifics (e.g., "DPIA mentions GDPR but lacks Article 30 record").
+       - Format: Markdown.
     """
     
     # We want the LLM to return exactly the fields we need
-    expected_keys = required_artifacts + ["actionsTaken", "thoughtProcess"]
+    expected_keys = required_artifacts + ["actionsTaken", "thoughtProcess", "adminAnalysis"]
     
     analysis = query_nova_json(
         prompt_name="librarian_agent",
@@ -170,10 +176,25 @@ def librarian_agent(state: GlobalState) -> Dict[str, Any]:
     new_chain_of_thought = state.get("chainOfThought", []).copy()
     new_chain_of_thought.append(cot_entry)
 
+    # 8. UI Overlay - Admin Analysis
+    if "ui_overlay" not in state: state["ui_overlay"] = {}
+    
+    # Use the dedicated adminAnalysis if available, otherwise fall back to thoughtProcess
+    admin_analysis_text = analysis.get("adminAnalysis", thought_process)
+    
+    # Prepend Audit Summary
+    final_admin_analysis = (
+        f"**Librarian Audit:** {artifacts_valid}\n"
+        f"**Missing Artifacts:** {', '.join(missing_artifacts) if missing_artifacts else 'None'}\n\n"
+        f"{admin_analysis_text}"
+    )
+    state["ui_overlay"]["adminAnalysis"] = final_admin_analysis
+
     return {
         "artifacts": new_artifacts, 
         "auditLog": new_audit_log,
         "projectMetadata": new_project_metadata,
         "governance": new_governance,
-        "chainOfThought": new_chain_of_thought
+        "chainOfThought": new_chain_of_thought,
+        "ui_overlay": state["ui_overlay"]
     }

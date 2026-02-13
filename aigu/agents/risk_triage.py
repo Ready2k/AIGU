@@ -132,9 +132,21 @@ def risk_triage_agent(state: GlobalState) -> Dict[str, Any]:
     new_chain_of_thought = state.get("chainOfThought", []).copy()
     new_chain_of_thought.append(cot_entry)
 
+    # 4. UI Overlay & Admin Analysis
+    # We provide two distinct views:
+    # - supportMessage: For the End User (Polite, high-level)
+    # - adminAnalysis: For the Admin/SME (Detailed, raw reasoning)
+    
+    user_message = f"**Risk Level:** {risk_level}\n**SLA:** {sla_days} Days\n\nYour project has been assessed. {thought_process.split('.')[0]}."
+    
+    new_ui_overlay = state.get("ui_overlay", {}).copy()
+    new_ui_overlay["supportMessage"] = user_message
+    new_ui_overlay["adminAnalysis"] = thought_process # Raw SME technical analysis
+    
     return {
         "projectMetadata": new_metadata,
         "governance": new_governance,
         "auditLog": new_audit_log,
-        "chainOfThought": new_chain_of_thought
+        "chainOfThought": new_chain_of_thought,
+        "ui_overlay": new_ui_overlay
     }

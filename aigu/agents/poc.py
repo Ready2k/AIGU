@@ -136,5 +136,15 @@ def poc_agent(state: GlobalState) -> GlobalState:
         state["chainOfThought"] = []
     state["chainOfThought"].append(reasoning)
     
+    # UI Overlay - Admin Analysis
+    admin_analysis = (
+        f"**POC Decision:** {state['governance']['status']}\n"
+        f"**Capability Type:** {capability_type}\n"
+        f"**CAF Status:** {caf_status}\n"
+        f"**Missing Docs:** {', '.join(missing_docs) if missing_docs else 'None'}"
+    )
+    if "ui_overlay" not in state: state["ui_overlay"] = {}
+    state["ui_overlay"]["adminAnalysis"] = admin_analysis
+
     print(f"  ✓ POC Agent complete: Status = {state['governance']['status']}")
     return state

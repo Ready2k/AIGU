@@ -141,5 +141,16 @@ def pilot_agent(state: GlobalState) -> GlobalState:
         state["chainOfThought"] = []
     state["chainOfThought"].append(reasoning)
     
+    # UI Overlay - Admin Analysis
+    admin_analysis = (
+        f"**Pilot Status:** {state['governance']['status']}\n"
+        f"**Risk Level:** {risk_level}\n"
+        f"**SLA:** {sla_days} Days (Deadline: {deadline.strftime('%Y-%m-%d')})\n"
+        f"**Admin Approved:** {admin_approved}\n"
+        f"**Pilot Complete:** {pilot_complete}"
+    )
+    if "ui_overlay" not in state: state["ui_overlay"] = {}
+    state["ui_overlay"]["adminAnalysis"] = admin_analysis
+
     print(f"  ✓ Pilot Agent complete: Status = {state['governance']['status']}")
     return state

@@ -110,7 +110,12 @@ const RiskCockpit = ({ config, onSave, isLoading }) => {
 
 const styles = StyleSheet.create({
     container: {
-        padding: 20,
+        padding: 24,
+        borderRadius: 16,
+        // Glassmorphism will be applied via style prop from parent or local override
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     section: {
         marginBottom: 24,

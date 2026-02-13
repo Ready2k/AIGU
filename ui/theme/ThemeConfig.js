@@ -70,22 +70,22 @@ export const LightPalette = {
     shadows: SHADOWS
 };
 
-// 2. Dark Mode Palette (Premium Onyx/Navy)
+// 2. Dark Mode Palette (Premium Cosmic Glass)
 export const DarkPalette = {
     mode: 'dark',
     colors: {
-        background: '#0F111A', // Deep Midnight
-        surface: '#1B1E2E',    // Slate Navy Surface
-        primary: '#3E7BFA',    // Vibrant Primary Blue
-        secondary: '#F59E0B',  // Vibrant Amber
-        accent: '#8B5CF6',     // Premium Violet
-        success: '#10B981',    // Emerald
-        warning: '#F59E0B',    // Amber
-        error: '#EF4444',      // Rose
-        textPrimary: '#F8FAFC', // Slate 50
-        textSecondary: '#94A3B8', // Slate 400
-        textInverted: '#FFFFFF', // White text on colored backgrounds
-        border: '#2D324D'      // Muted border
+        background: '#050511', // Deep Space Black/Blue
+        surface: 'rgba(30, 32, 50, 0.7)', // Glassy Surface
+        primary: '#00F0FF',    // Neon Cyan
+        secondary: '#bf00ff',  // Electric Purple
+        accent: '#FF0055',     // Neon Pink
+        success: '#00FF9D',    // Neon Green
+        warning: '#FFB800',    // Neon Orange
+        error: '#FF2E2E',      // Bright Red
+        textPrimary: '#F0F4F8', // Ice White
+        textSecondary: '#94A3B8', // Muted Blue-Grey
+        textInverted: '#000000', // Black text on neon backgrounds
+        border: 'rgba(255, 255, 255, 0.1)' // Subtle glass border
     },
     typography: {
         ...TYPOGRAPHY,
@@ -96,17 +96,23 @@ export const DarkPalette = {
     shadows: {
         card: Platform.select({
             web: {
-                boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.3)',
-                elevation: 8,
+                boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
             },
             default: {
-                shadowColor: '#000',
+                shadowColor: '#00F0FF', // Neon Glow
                 shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.3,
+                shadowOpacity: 0.2,
                 shadowRadius: 10,
                 elevation: 8,
             }
         })
+    },
+    // Glassmorphism Utility
+    glass: {
+        backgroundColor: 'rgba(30, 32, 50, 0.6)',
+        backdropFilter: 'blur(12px)',
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderWidth: 1,
     }
 };
 

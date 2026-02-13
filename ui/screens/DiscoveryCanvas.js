@@ -30,6 +30,10 @@ const DiscoveryCanvas = ({ actions, initialData = {}, isRemediation = false, set
         if (lastSyncedData.current === dataKey) return;
         lastSyncedData.current = dataKey;
 
+        // VISUAL CUE: Fade in a glow effect when agent updates data
+        // For now, simpler implementation - logic handled by updated data showing
+        // Ideally, we'd trigger an animation state here.
+
         setFormData(prev => ({
             ...prev,
             projectName: initialData.projectName || prev.projectName || '',

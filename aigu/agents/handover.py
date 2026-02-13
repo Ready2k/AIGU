@@ -119,6 +119,7 @@ def handover_agent(state: GlobalState) -> GlobalState:
     ]
     
     reasoning_text = "\n".join(cot_steps)
+    state["ui_overlay"]["adminAnalysis"] = reasoning_text
     s3_uri = upload_reasoning_to_s3(submission_id, "Handover Agent", reasoning_text)
     
     # Create audit log entry
