@@ -15,8 +15,9 @@ import MarkdownText from '../components/MarkdownText';
  * - Provides actionable checklists
  */
 
-const SupportAgent = ({ state, onClose, actions: providedActions, contextOverride }) => {
+const SupportAgent = ({ state, onClose, actions: providedActions, contextOverride, mode = 'user' }) => {
     const { theme } = useAiguTheme();
+    const isAdmin = mode === 'admin';
 
     // Use provided actions if available, fallback to new hook
     const hookState = useAiguState(state?.submissionId || 'temp', state?.userId || 'anonymous');
@@ -32,33 +33,19 @@ const SupportAgent = ({ state, onClose, actions: providedActions, contextOverrid
             let greeting = '';
 
             // If the backend LLM has provided a specific support message, use it
-            if (state.ui_overlay?.supportMessage) {
+            if (isAdmin && state.ui_overlay?.adminSupportMessage) {
+                greeting = state.ui_overlay.adminSupportMessage;
+            } else if (!isAdmin && state.ui_overlay?.supportMessage) {
                 greeting = state.ui_overlay.supportMessage;
             } else {
                 // Fallback to local synthesis if backend message is missing
                 const stage = state.projectMetadata?.currentStage || 'Intake';
                 const status = state.governance?.status || 'Draft';
-                const blockers = state.governance?.blockers || [];
-                const missingArtifacts = blockers
-                    .filter(b => b.includes(': Missing '))
-                    .map(b => b.split(': Missing ')[1]);
 
-                greeting = `👋 Hello! I'm your GIGC Assistant.\n\n`;
-                greeting += `**Current Status:** ${status}\n`;
-                greeting += `**Stage:** ${stage}\n\n`;
-
-                if (missingArtifacts.length > 0) {
-                    greeting += `I noticed you need the following items:\n`;
-                    missingArtifacts.forEach(artifact => {
-                        greeting += `• ${artifact}\n`;
-                    });
-                    greeting += `\nWould you like guidance on any of these?`;
-                } else if (status === 'In-Review') {
-                    greeting += `Your project is currently under review. The GIGC team will respond within the SLA timeframe.`;
-                } else if (status === 'Approved') {
-                    greeting += `Congratulations! Your project has been approved. You can proceed to the next phase.`;
+                if (isAdmin) {
+                    greeting = `🔍 **Admin Strategy Briefing**\n\nProject: **${state.projectMetadata?.name || 'Untitled'}**\nStage: ${stage}\nStatus: ${status}\n\nI am ready to help you analyze risks and make governance decisions. How can I assist?`;
                 } else {
-                    greeting += `How can I help you with your governance submission today?`;
+                    greeting = `👋 Hello! I'm your GIGC Assistant.\n\n**Current Status:** ${status}\n**Stage:** ${stage}\n\nHow can I help you with your governance submission today?`;
                 }
             }
 
@@ -69,7 +56,7 @@ const SupportAgent = ({ state, onClose, actions: providedActions, contextOverrid
                 timestamp: new Date().toISOString()
             }]);
         }
-    }, [state, messages.length]);
+    }, [state, messages.length, isAdmin]);
 
     const sendMessage = async () => {
         if (!input.trim()) return;
@@ -91,6 +78,7 @@ const SupportAgent = ({ state, onClose, actions: providedActions, contextOverrid
             const response = await actions.askSupportAgent({
                 message: userInput,
                 context: {
+                    isAdmin: isAdmin,
                     submissionId: state?.submissionId,
                     stage: state?.projectMetadata?.currentStage,
                     status: state?.governance?.status,
@@ -141,10 +129,10 @@ const SupportAgent = ({ state, onClose, actions: providedActions, contextOverrid
             <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
                 <View>
                     <Text style={{ ...theme.typography.subheader, color: theme.colors.textPrimary }}>
-                        💬 GIGC Assistant
+                        {isAdmin ? '🛡️ Admin Support Assistant' : '💬 GIGC Assistant'}
                     </Text>
                     <Text style={{ ...theme.typography.caption, color: theme.colors.textSecondary, fontSize: 10 }}>
-                        Professional Governance Support
+                        {isAdmin ? 'Strategic Governance SME' : 'Professional Governance Support'}
                     </Text>
                 </View>
                 {onClose && (
@@ -179,6 +167,7 @@ const SupportAgent = ({ state, onClose, actions: providedActions, contextOverrid
                 ref={scrollViewRef}
                 style={styles.messagesContainer}
                 contentContainerStyle={{ padding: 16 }}
+                showsVerticalScrollIndicator={true}
             >
                 {messages.map((message) => (
                     <View
@@ -192,7 +181,9 @@ const SupportAgent = ({ state, onClose, actions: providedActions, contextOverrid
                                     : theme.colors.background,
                                 borderColor: message.role === 'user'
                                     ? theme.colors.primary
-                                    : theme.colors.border
+                                    : theme.colors.border,
+                                borderBottomRightRadius: message.role === 'user' ? 2 : 12,
+                                borderBottomLeftRadius: message.role === 'assistant' ? 2 : 12
                             }
                         ]}
                     >
@@ -233,7 +224,7 @@ const SupportAgent = ({ state, onClose, actions: providedActions, contextOverrid
                         color: theme.colors.textPrimary,
                         borderColor: theme.colors.border
                     }]}
-                    placeholder="Ask me anything about governance..."
+                    placeholder={isAdmin ? "Ask for strategic guidance..." : "Ask me anything about governance..."}
                     placeholderTextColor={theme.colors.textSecondary}
                     value={input}
                     onChangeText={setInput}

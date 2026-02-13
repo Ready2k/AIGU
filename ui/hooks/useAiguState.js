@@ -348,10 +348,18 @@ export const useAiguState = (submissionId, userId) => {
     const askSupportAgent = useCallback(async (requestData) => {
         try {
             console.log(`Asking support agent: ${requestData.message.substring(0, 50)}...`);
+
+            // Extract isAdmin from context and put it in the top-level payload for the handler
+            const isAdmin = requestData.context?.isAdmin || false;
+            const payload = {
+                ...requestData,
+                isAdmin: isAdmin
+            };
+
             const result = await signedFetch('/support/ask', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestData)
+                body: JSON.stringify(payload)
             });
             return result;
         } catch (err) {

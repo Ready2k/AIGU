@@ -2,10 +2,12 @@ import json
 import os
 import traceback
 import decimal
+import boto3
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
-import boto3
+from boto3.dynamodb.conditions import Key, Attr
 from aigu.graph import app
+from aigu.utils import generate_audit_signature, get_current_user_identity, delete_s3_prefix, upload_reasoning_to_s3
 
 def convert_floats_to_decimals(obj):
     if isinstance(obj, float):
@@ -149,9 +151,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         "blockers": [f"Admin Request: {msg}"]
                     })
                     
+                    
                     # [NEW] Persist in Audit Log so it appears in the WorkflowProgress timeline
-                    from datetime import datetime, timezone
-                    from aigu.utils import generate_audit_signature, get_current_user_identity
                     
                     audit_entry = {
                         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -650,7 +651,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
             # 2. Fetch Prompt and Invoke
             try:
-                prompt_tmpl = get_active_prompt("support-agent", tag="production")
+                is_admin = payload.get('isAdmin', False)
+                prompt_name = "admin-support-agent" if is_admin else "support-agent"
+                print(f"Support Request: isAdmin={is_admin} -> Using prompt '{prompt_name}'")
+                
+                prompt_tmpl = get_active_prompt(prompt_name, tag="production")
                 
                 prompt_state = {
                     'projectName': project_metadata.get('projectName') or project_metadata.get('name') or 'Draft Project',
@@ -738,32 +743,76 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     
                     # Fetch prompts - LangFuse SDK returns prompt objects
                     # We need to get the list and extract relevant fields
-                    prompts_list = []
-                    
-                    # Get all prompts (LangFuse doesn't have a direct list_prompts method)
-                    # We'll fetch known prompt names from our system
-                    prompt_names = ['intake-orchestrator', 'risk-triage', 'gatekeeper', 'support-agent', 'librarian_agent']
-                    
-                    for prompt_name in prompt_names:
-                        try:
-                            prompt = langfuse.get_prompt(prompt_name, label='production')
-                            if prompt:
-                                prompts_list.append({
-                                    'name': prompt_name,
-                                    'content': prompt.prompt,
-                                    'type': prompt.type if hasattr(prompt, 'type') else 'text',
-                                    'version': prompt.version if hasattr(prompt, 'version') else 1,
-                                    'tags': prompt.labels if hasattr(prompt, 'labels') else ['production']
-                                })
-                        except Exception as e:
-                            print(f"Could not fetch prompt {prompt_name}: {e}")
-                            continue
-                    
-                    return {
-                        "statusCode": 200,
-                        "headers": headers,
-                        "body": json.dumps(prompts_list)
-                    }
+                    # Fetch all prompt metadata dynamically from LangFuse
+                    try:
+                        # LangFuse SDK v3 provides an api wrapper for paged results
+                        prompts_meta_resp = langfuse.api.prompts.list()
+                        prompt_metas = prompts_meta_resp.data if hasattr(prompts_meta_resp, 'data') else []
+                        
+                        prompts_list = []
+                        print(f"Admin Prompts: Dynamic sync started. Found {len(prompt_metas)} metadata entries.")
+                        
+                        for meta in prompt_metas:
+                            prompt_name = meta.name
+                            try:
+                                # Fetch the actual prompt content for each name
+                                # We prioritize 'production' tag if available
+                                prompt = langfuse.get_prompt(prompt_name, label='production')
+                                if prompt:
+                                    prompts_list.append({
+                                        'name': prompt_name,
+                                        'content': prompt.prompt,
+                                        'type': prompt.type if hasattr(prompt, 'type') else 'text',
+                                        'version': prompt.version if hasattr(prompt, 'version') else 1,
+                                        'tags': prompt.labels if hasattr(prompt, 'labels') else ['production']
+                                    })
+                            except Exception as e:
+                                print(f"  - Sync Warning: Could not fetch 'production' version for {prompt_name}: {e}")
+                                # Try fetching without tag as fallback?
+                                try:
+                                    prompt = langfuse.get_prompt(prompt_name)
+                                    if prompt:
+                                        prompts_list.append({
+                                            'name': prompt_name,
+                                            'content': prompt.prompt,
+                                            'type': prompt.type if hasattr(prompt, 'type') else 'text',
+                                            'version': prompt.version if hasattr(prompt, 'version') else 1,
+                                            'tags': prompt.labels if hasattr(prompt, 'labels') else ['latest']
+                                        })
+                                except:
+                                    pass
+                                continue
+                        
+                        print(f"Admin Prompts: Sync complete. {len(prompts_list)} prompts ready.")
+                        return {
+                            "statusCode": 200,
+                            "headers": headers,
+                            "body": json.dumps(prompts_list)
+                        }
+                    except Exception as meta_err:
+                        print(f"Error listing prompt metadata: {meta_err}")
+                        # Fallback to hard-coded list if dynamic listing fails
+                        prompt_names = ['intake-orchestrator', 'risk-triage', 'gatekeeper', 'support-agent', 'admin-support-agent', 'librarian_agent']
+                        prompts_list = []
+                        
+                        for prompt_name in prompt_names:
+                            try:
+                                prompt = langfuse.get_prompt(prompt_name, label='production')
+                                if prompt:
+                                    prompts_list.append({
+                                        'name': prompt_name,
+                                        'content': prompt.prompt,
+                                        'type': prompt.type if hasattr(prompt, 'type') else 'text',
+                                        'version': prompt.version if hasattr(prompt, 'version') else 1,
+                                        'tags': prompt.labels if hasattr(prompt, 'labels') else ['production']
+                                    })
+                            except:
+                                continue
+                        return {
+                            "statusCode": 200,
+                            "headers": headers,
+                            "body": json.dumps(prompts_list)
+                        }
                 except Exception as e:
                     print(f"Error fetching prompts: {e}")
                     return {
@@ -827,7 +876,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             # Use Scan with FilterExpression for user specific sessions
             # In production, a GSI on userId would be more efficient
-            from boto3.dynamodb.conditions import Attr
             response = state_table.scan(FilterExpression=Attr('userId').eq(user_id))
             items = response.get('Items', [])
             
@@ -840,9 +888,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # --- PATH: /cancel ---
         elif "/cancel" in path and method == "POST":
             import boto3
-            from datetime import datetime, timezone
-            from aigu.utils import generate_audit_signature, get_current_user_identity
-            
             dynamodb = boto3.resource('dynamodb')
             state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
             
@@ -895,7 +940,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     "headers": headers,
                     "body": json.dumps({"success": True, "status": "Cancelled", "auditEntry": audit_entry})
                 }
-                
             except Exception as e:
                 print(f"Error cancelling project: {e}")
                 return {
@@ -985,7 +1029,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     )
                     
                     # [CLEANUP] Delete associated S3 assets (uploads and reasoning)
-                    from aigu.utils import delete_s3_prefix
                     bucket_name = os.environ.get('ARTIFACT_BUCKET', 'aigu-artifacts')
                     
                     # 1. Delete Uploads
@@ -1028,7 +1071,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 else:
                     # Fallback: Query by submissionId only if userId mismatch (e.g. casing)
                     print(f"No exact match for {submission_id}/{effective_userId}. Trying query by submissionId...")
-                    from boto3.dynamodb.conditions import Key
                     q_resp = state_table.query(KeyConditionExpression=Key('submissionId').eq(submission_id))
                     if q_resp.get('Items'):
                         detailed_state = q_resp['Items'][0]
@@ -1070,9 +1112,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # --- PATH: /governance/override ---
         elif "/governance/override" in path and method == "POST":
             import boto3
-            from datetime import datetime, timezone
-            from aigu.utils import generate_audit_signature, get_current_user_identity
-            
             dynamodb = boto3.resource('dynamodb')
             state_table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE_NAME", "AIGU_Global_State"))
             
@@ -1105,7 +1144,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # 1. Get Item
             if not target_user_id:
                  # Fallback query
-                 from boto3.dynamodb.conditions import Key
                  q_resp = state_table.query(KeyConditionExpression=Key('submissionId').eq(target_id))
                  if q_resp.get('Items'):
                      target_user_id = q_resp['Items'][0].get('userId')
@@ -1138,7 +1176,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # [CRITICAL UPDATE] Trigger Graph Resumption
                 try:
                     print(f"Triggering graph resumption for override on {target_id}")
-                    from aigu.graph import app
                     
                     config = {"configurable": {"thread_id": target_id}}
                     
@@ -1164,7 +1201,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 print(f"Error in manual override: {e}")
                 return {"statusCode": 500, "headers": headers, "body": json.dumps({"error": str(e)})}
 
-        # --- PATH: /config ---
         # --- PATH: /config ---
         elif "/config" in path:
             import boto3
@@ -1224,10 +1260,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # --- PATH: /admin/config ---
         elif "/admin/config" in path:
-            import boto3
-            from datetime import datetime, timezone
-            from aigu.utils import get_current_user_identity
-            
             dynamodb = boto3.resource('dynamodb')
             config_table = dynamodb.Table(os.environ.get("SYS_CONFIG_TABLE", "AIGU_SystemConfig"))
             
@@ -1295,6 +1327,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     except Exception as e:
         print(f"Execution Error: {str(e)}")
+        import traceback
         traceback.print_exc()
         return {
             "statusCode": 500,

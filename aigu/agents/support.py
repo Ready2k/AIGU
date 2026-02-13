@@ -126,31 +126,32 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
     # 2. Invoke Amazon Nova for Personalized Status Synthesis
     print(f"Support: Invoking Amazon Nova for status summary.")
     
+    # Common variables for substitution
+    prompt_state = {
+        'projectName': project_metadata.get('name', 'Unknown'),
+        'status': status,
+        'stage': stage,
+        'riskLevel': risk_level,
+        'riskReasoning': risk_reasoning,
+        'slaDeadline': governance.get('slaDeadline', 'TBD'),
+        'blockers': blockers_str,
+        'missingArtifacts': missing_artifacts_str,
+        'technicalApproach': technical_approach,
+        'path': project_metadata.get('path', 'Standard'),
+        'description': project_metadata.get('description', '')
+    }
+    system_messages = [{"role": "user", "content": f"State Summary:\n{context_str}\n\nProject Description (Draft):\n{prompt_state['description']}\n\nPlease provide guidance based on the current state and description."}]
+
+    # A. Standard User Message
     try:
         prompt_tmpl = get_active_prompt("support-agent", tag="production")
-
-        # Build state dict for prompt variable substitution
-        prompt_state = {
-            'projectName': project_metadata.get('name', 'Unknown'),
-            'status': status,
-            'stage': stage,
-            'riskLevel': risk_level,
-            'riskReasoning': risk_reasoning,
-            'slaDeadline': governance.get('slaDeadline', 'TBD'),
-            'blockers': blockers_str,
-            'missingArtifacts': missing_artifacts_str,
-            'technicalApproach': technical_approach,
-            'path': project_metadata.get('path', 'Standard'),
-            'description': project_metadata.get('description', '')
-        }
-        
         message = invoke_nova(
             prompt_object=prompt_tmpl,
-            messages=[{"role": "user", "content": f"State Summary:\n{context_str}\n\nProject Description (Draft):\n{prompt_state['description']}\n\nPlease provide guidance based on the current state and description."}],
+            messages=system_messages,
             state=prompt_state
         ).strip()
     except Exception as e:
-        print(f"Nova invocation failed for support: {e}")
+        print(f"Nova invocation failed for support (User): {e}")
         # Robust fallback for test resilience and production stability
         message = f"Your project is currently {status} in the {stage} phase."
         if blockers_str != "None":
@@ -167,8 +168,22 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
         elif 'biometric' in desc_lower:
              message = f"⚠️ Governance Warning: This project contains potential compliance violations (Biometric/HR Automations detected). {message}"
 
-
-
+    # B. Admin Strategy Message
+    try:
+        admin_prompt_tmpl = get_active_prompt("admin-support-agent", tag="production")
+        admin_message = invoke_nova(
+            prompt_object=admin_prompt_tmpl,
+            messages=system_messages,
+            state=prompt_state
+        ).strip()
+    except Exception as e:
+        print(f"Nova invocation failed for support (Admin): {e}")
+        # Standard fallback for admin
+        admin_message = f"Admin Analysis: Project is {status} at stage {stage}."
+        if blockers_str != "None":
+            admin_message += f" Blockers: {blockers_str}."
+        if risk_level:
+            admin_message += f" Assessed Risk: {risk_level}."
 
     # 3. Secure Reasoning Access (Hydrate Audit Log for Viewer)
     presigned_urls = {}
@@ -183,7 +198,8 @@ def support_agent(state: GlobalState) -> Dict[str, Any]:
     return {
         "ui_overlay": {
             "supportMessage": message,
-            "adminFeedback": admin_message, 
+            "adminSupportMessage": admin_message,
+            "adminFeedback": admin_message, # Kept for backward compatibility if used in UI
             "showBlockerAlert": len(governance.get("blockers", [])) > 0,
             "slaDisplay": governance.get("slaDeadline", "TBD"),
             "reasoningUrls": presigned_urls # Map: s3_uri -> https://presigned-url...

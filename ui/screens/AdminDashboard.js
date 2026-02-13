@@ -344,6 +344,7 @@ const AdminDashboard = ({ userId, onLogout }) => {
                     <View style={{ marginTop: 24, flex: 1, ...theme.glass, borderRadius: 12, overflow: 'hidden' }}>
                         <SupportAgent
                             state={selectedProject}
+                            mode="admin"
                             onClose={() => { }} // No close needed for embedded view
                         />
                     </View>
